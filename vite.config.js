@@ -12,12 +12,13 @@ const stubOptionalDeps = {
 };
 
 export default defineConfig({
-  base: '/zappi-ecosystem-configuration-tool/',
+  base: '/myenergi-ecosystem-builder-v2/',
   plugins: [react(), stubOptionalDeps],
   optimizeDeps: {
     exclude: ['jspdf'],
   },
   build: {
+    outDir: 'docs',
     rollupOptions: {
       external: ["canvg", "dompurify"],
     },
