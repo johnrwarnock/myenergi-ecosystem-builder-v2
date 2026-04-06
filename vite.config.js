@@ -12,6 +12,7 @@ const stubOptionalDeps = {
 };
 
 export default defineConfig({
+  base: '/zappi-ecosystem-configuration-tool/',
   plugins: [react(), stubOptionalDeps],
   optimizeDeps: {
     exclude: ['jspdf'],
