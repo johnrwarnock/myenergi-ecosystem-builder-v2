@@ -135,7 +135,7 @@ export function Diagram({ config }) {
   const showHarvi    = gridToHarvi || solarToHarvi;
 
   // ── Fixed layout constants ────────────────────────────────
-  const VW=980, busY=175;
+  const VW=730, VX=-20, busY=175;
   const pylonX=55;
   const meterX=115, meterW=56, meterH=34;
   const boardX=260, boardW=96, boardH=50, boardCX=308;
@@ -181,7 +181,7 @@ export function Diagram({ config }) {
   // ── AC Battery ───────────────────────────────────────────
   const acBatW=50, acBatH=40;
   const acBatTopY = busY - invH/2 - acBatH - 68;
-  const acBatBotY_eff = libbiIsBat_ac ? acBatTopY + libbiImgH : acBatTopY + acBatH;
+  const acBatBotY_eff = acBatTopY + acBatH;
   const acBatBotY = acBatBotY_eff;
   const acBatCX   = invCX;
   const acBatLineY= acBatBotY_eff;       // horizontal run at battery bottom
@@ -193,47 +193,43 @@ export function Diagram({ config }) {
   const minCtrlTopY = busY + boardH/2 + 122; // 322 — matches 3ph-solar gap
   let ctrlTopY = Math.max(rightBottom + baseGap + extraGap, minCtrlTopY);
   const devList = libbiIsBat_dc || libbiIsBat_ac ? pr.filter(n=>n!=="libbi") : pr;
-  const nDevices = devList.length;
-  const devStartCX = nDevices > 1 ? boardCX - Math.round((nDevices-1)*24/2) : boardCX;
-  const ctrlX = devStartCX-devW/2;
-  const ctrlCX = devStartCX;
-
-  // ── Harvi positions — centred vertically between MAIN SWITCHBOARD and zappi ──
-  // Always use minCtrlTopY so position is identical across all diagrams
-  const harviTopY = Math.round((busY + boardH/2 + minCtrlTopY) / 2 - harviH/2);
+  const ctrlX = boardCX-devW/2;
+  const ctrlCX = boardCX;
 
   let leftHarvi=null, rightHarvis=[];
 
   if (use1phHarvi) {
-    // Single harvi left of zappi — placed after we know ctrlTopY; placeholder cx here
+    // Single harvi left of zappi — finalised below once ctrlTopY is known
     leftHarvi = { side:"left", forGrid:true, label:"harvi" };
   } else {
     if (gridToHarvi) {
-      leftHarvi = { side:"left", x:ctrlCX-harviW-22, topY:harviTopY, cx:ctrlCX-harviW-22+harviW/2, bottomY:harviTopY+harviH, forGrid:true, label:"harvi 1" };
+      leftHarvi = { side:"left", x:ctrlCX-harviW-22, cx:ctrlCX-harviW-22+harviW/2, forGrid:true };
     }
     if (solarToHarvi && inv.some(v=>v.ms)) {
       const nSH = Math.ceil(solarCTcount/3);
       for (let i=0;i<nSH;i++) {
         const hx = ctrlCX+22 + i*(harviW+harviHGap);
-        const maxCTY = i < nSH-1 ? invCYs[i] : Math.max(...invCYs.slice(i));
-        const hTopY  = Math.max(harviTopY, maxCTY + 30);
-        rightHarvis.push({ side:"right", x:hx, topY:hTopY, cx:hx+harviW/2, bottomY:hTopY+harviH, forGrid:false, idx:i,
-          label: (gridToHarvi ? `harvi ${i+2}` : (nSH>1 ? `harvi ${i+1}` : "harvi")) });
+        rightHarvis.push({ side:"right", x:hx, cx:hx+harviW/2, forGrid:false, idx:i, isAcBat:false });
       }
     }
-    if (!gridToHarvi && rightHarvis.length===1) rightHarvis[0].label="harvi";
+    // AC battery needs its own dedicated harvi in multi-phase (cannot share with solar)
+    if (isMultiPh && hasACBat && ab[0]?.mb) {
+      const offset = rightHarvis.length;
+      const hx = ctrlCX+22 + offset*(harviW+harviHGap);
+      rightHarvis.push({ side:"right", x:hx, cx:hx+harviW/2, forGrid:false, isAcBat:true });
+    }
+    // Align all harvi bottom edges to controller top, then relabel
+    const allHarvisToAlign = [...(leftHarvi?[leftHarvi]:[]), ...rightHarvis];
+    allHarvisToAlign.forEach(h => { h.topY = ctrlTopY - harviH; h.bottomY = ctrlTopY; });
+    if (allHarvisToAlign.length === 1) { allHarvisToAlign[0].label = "harvi"; }
+    else { allHarvisToAlign.forEach((h, i) => { h.label = `harvi ${i+1}`; }); }
   }
 
   const allHarvis = [...(leftHarvi&&!use1phHarvi?[leftHarvi]:[]), ...rightHarvis];
 
-  // Ensure ctrlTopY is below all right-harvi bottoms
-  if (rightHarvis.length > 0) {
-    const maxRHBot = Math.max(...rightHarvis.map(h=>h.bottomY));
-    if (maxRHBot + 20 > ctrlTopY) ctrlTopY = maxRHBot + 20;
-  }
-
-  // Finalise 1ph harvi position (left of zappi) now we know ctrlTopY
+  // Finalise 1ph harvi position (left of zappi, centred vertically between board and controller)
   if (use1phHarvi) {
+    const harviTopY = Math.round((busY + boardH/2 + ctrlTopY) / 2 - harviH/2);
     leftHarvi.x = ctrlX - harviW - 16;
     leftHarvi.topY = harviTopY;
     leftHarvi.cx = ctrlX - harviW - 16 + harviW/2;
@@ -244,13 +240,17 @@ export function Diagram({ config }) {
   const gridLandXs  = nSitePh===3 ? [ctrlCX-18,ctrlCX-10,ctrlCX-2] : nSitePh===2 ? [ctrlCX-13,ctrlCX-5] : [ctrlCX-8];
   const solarLandXs = nSitePh===3 ? [ctrlCX+2, ctrlCX+10,ctrlCX+18] : nSitePh===2 ? [ctrlCX+5,ctrlCX+13] : [ctrlCX+8];
 
-  const gridDestXs = gridToHarvi && leftHarvi ? [leftHarvi.cx] : gridLandXs;
-  const gridDestY  = gridToHarvi && leftHarvi ? leftHarvi.topY : ctrlTopY;
+  // When libbi is AC battery AND controller, grid CTs connect directly to libbi
+  const libbiIsCtrl = libbiIsBat_ac && pr[0] === "libbi";
+  let gridDestXs = gridToHarvi && leftHarvi ? [leftHarvi.cx] : gridLandXs;
+  let gridDestY  = gridToHarvi && leftHarvi ? leftHarvi.topY : ctrlTopY;
+  if (libbiIsCtrl) { gridDestXs = [acBatCX]; gridDestY = acBatTopY + Math.round(libbiImgH * 0.6); }
 
+  const solarHarvis = rightHarvis.filter(h => !h.isAcBat);
   const solarDestFor = (i) => {
     if (!solarToHarvi) return { xs:solarLandXs, y:ctrlTopY };
     if (use1phHarvi)   return { xs:[leftHarvi.cx], y:leftHarvi.topY };
-    const h = rightHarvis[Math.min(i, rightHarvis.length-1)];
+    const h = solarHarvis[Math.min(i, solarHarvis.length-1)];
     return h ? { xs:[h.cx], y:h.topY } : { xs:solarLandXs, y:ctrlTopY };
   };
 
@@ -259,15 +259,12 @@ export function Diagram({ config }) {
     ? gridLandXs.concat(solarLandXs)
     : (leftHarvi ? gridLandXs : solarLandXs);
 
-  // ── Secondary device positions ────────────────────────────
-  const nSec = pr.length-1;
+  // ── Secondary device positions — stacked vertically, no horizontal stagger ──
   const zappiH = devHOf("zappi");
-  const secXStep = 24; // horizontal stagger per secondary device
   const devPositions = devList.reduce((acc, name, i) => {
     if (i === 0) return [{ name, isCtrl:true, x:ctrlX, cx:ctrlCX, y:ctrlTopY }];
     const prev = acc[i-1];
-    const cx = ctrlCX + i * secXStep;
-    return [...acc, { name, isCtrl:false, x:cx-devWOf(name)/2, cx, y:prev.y + devHOf(prev.name) + devGap }];
+    return [...acc, { name, isCtrl:false, x:ctrlCX-devWOf(name)/2, cx:ctrlCX, y:prev.y + devHOf(prev.name) + devGap }];
   }, []);
 
   // ── Helpers ───────────────────────────────────────────────
@@ -294,7 +291,7 @@ export function Diagram({ config }) {
   const VH = bottomAll+60; // extra padding so secondary devices are never clipped
 
   return (
-    <svg width="100%" viewBox={`0 0 ${VW} ${VH}`} style={{background:DARK,borderRadius:8,display:"block"}}>
+    <svg width="100%" viewBox={`${VX} 0 ${VW} ${VH}`} style={{background:DARK,borderRadius:8,display:"block"}}>
 
       {/* GRID */}
       <image href={gridImgUrl} x={pylonX-50} y={busY-90} width={100} height={90} preserveAspectRatio="xMidYMid meet"/>
@@ -314,13 +311,8 @@ export function Diagram({ config }) {
       <text x={boardCX} y={busY-boardH/2-10} textAnchor="middle" fill={WHITE} fontSize={8} fontWeight="700" fontFamily="Overpass,sans-serif">MAIN SWITCHBOARD</text>
       <image href={mainSbImgUrl} x={boardX} y={busY-boardH/2} width={boardW} height={boardH} preserveAspectRatio="none"/>
 
-      {/* Horizontal bus from switchboard extending to rightmost device, then a vertical drop to each device */}
-      {devPositions.length > 1 && (
-        <line x1={devPositions[0].cx} y1={busY+boardH/2} x2={devPositions[devPositions.length-1].cx} y2={busY+boardH/2} stroke={WHITE} strokeWidth={3}/>
-      )}
-      {devPositions.map((d,i) => (
-        <line key={`drop-${i}`} x1={d.cx} y1={busY+boardH/2} x2={d.cx} y2={d.y} stroke={WHITE} strokeWidth={3}/>
-      ))}
+      {/* Vertical trunk from switchboard to bottommost device */}
+      <line x1={ctrlCX} y1={busY+boardH/2} x2={ctrlCX} y2={devPositions[devPositions.length-1].y} stroke={WHITE} strokeWidth={3}/>
 
       {/* 1ph harvi — left of zappi */}
       {use1phHarvi && leftHarvi && (
@@ -358,7 +350,6 @@ export function Diagram({ config }) {
           ) : (
             <>
               <image href={DEVICE_IMGS[d.name]} x={d.cx-devWOf(d.name)/2} y={d.y} width={devWOf(d.name)} height={devHOf(d.name)} preserveAspectRatio="xMidYMid meet"/>
-              <text x={d.cx+devWOf(d.name)/2+(d.isCtrl?30:10)} y={d.y+devHOf(d.name)/2} dominantBaseline="middle" textAnchor={d.isCtrl?"middle":"start"} fill={d.isCtrl?G_TXT:"#111111"} fontSize={7} fontWeight="700" fontFamily="Overpass,sans-serif">{d.isCtrl?"controller":"secondary"}</text>
             </>
           )}
           {/* WiFi between adjacent devices: points down (away from master/prev device toward slave) */}
@@ -371,19 +362,21 @@ export function Diagram({ config }) {
       {/* AC Battery — rendered independently of solar so it appears even with no inverter */}
       {hasACBat && (
         <>
-          {libbiIsBat_ac
-            ? <image href={libbiImgUrl} x={acBatCX-libbiImgW/2} y={acBatTopY} width={libbiImgW} height={libbiImgH} preserveAspectRatio="xMidYMid meet"/>
-            : <BatIcon x={acBatCX-acBatW/2} y={acBatTopY} w={acBatW} h={acBatH} label={trunc(ab[0]?.label, 11) || "BATTERY"}/>
-          }
+          <BatIcon x={acBatCX-acBatW/2} y={acBatTopY} w={acBatW} h={acBatH} label={trunc(ab[0]?.label, 11) || "BATTERY"}/>
           {/* Battery → horizontal to boardCX → down to switchboard top */}
           <line x1={acBatCX-acBatW/2} y1={acBatLineY} x2={boardCX} y2={acBatLineY} stroke={WHITE} strokeWidth={2.5}/>
           <line x1={boardCX} y1={acBatLineY} x2={boardCX} y2={busY-boardH/2} stroke={WHITE} strokeWidth={2.5}/>
-          {ab[0]?.mb && (
-            <>
-              <CT x={acBatCtX} y={acBatLineY} label="Bat CT3"/>
-              <Curve x1={acBatCtX+5} y1={acBatLineY+8} x2={use1phHarvi?leftHarvi?.cx:solarLandXs[solarLandXs.length-1]} y2={use1phHarvi?leftHarvi?.topY:ctrlTopY} dashed={true} sw={1.3}/>
-            </>
-          )}
+          {ab[0]?.mb && (() => {
+            const acBatHarvi = rightHarvis.find(h => h.isAcBat);
+            const destX = use1phHarvi ? leftHarvi?.cx : acBatHarvi ? acBatHarvi.cx : solarLandXs[solarLandXs.length-1];
+            const destY = use1phHarvi ? leftHarvi?.topY : acBatHarvi ? acBatHarvi.topY : ctrlTopY;
+            return (
+              <>
+                <CT x={acBatCtX} y={acBatLineY} label="Bat CT"/>
+                <Curve x1={acBatCtX+5} y1={acBatLineY+8} x2={destX} y2={destY} dashed={true} sw={1.3}/>
+              </>
+            );
+          })()}
         </>
       )}
 

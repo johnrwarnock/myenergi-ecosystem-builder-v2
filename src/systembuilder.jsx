@@ -25,7 +25,9 @@ const INVERTER_BRANDS = [
   { name: "Solis",                acOnly: false, allInOne: false, autoBatId: null },
   { name: "iStore (Huawei OEM)",  acOnly: false, allInOne: false, autoBatId: 10 },
   { name: "FoxESS",               acOnly: false, allInOne: false, autoBatId: 11 },
-  { name: "Other",                acOnly: false, allInOne: false, autoBatId: null },
+  { name: "Other (standalone inverter)", acOnly: false, allInOne: false, autoBatId: null },
+  { name: "Other (hybrid + DC battery)", acOnly: false, allInOne: false, autoHybrid: true, autoBatId: 99 },
+  { name: "Other (all-in-one)",          acOnly: false, allInOne: true,  autoBatId: 99 },
 ];
 
 const BATTERIES = [
@@ -61,10 +63,11 @@ const PRODUCTS = [
 ];
 
 // ── Translate SystemBuilder state → Diagram config ───────────────────────────
-function buildDiagramConfig(cfg, wireless, monitorSolar, monitorBattery) {
+function buildDiagramConfig(cfg, wireless, monitorSolar, monitorBattery, controllerProductId) {
   const { phase, inverters = [], batteries = [], selections = {} } = cfg;
 
   const sp = phase || "1ph";
+  const CTRL_CTS_MAP = { "zappi":3, "eddi+":3, "eddi":2, "GLO":2, "libbi":3 };
   const wl = wireless || phase === "2ph";
 
   const inv = inverters
@@ -74,7 +77,7 @@ function buildDiagramConfig(cfg, wireless, monitorSolar, monitorBattery) {
         ? DC_BATTERIES.find(b => b.id === parseInt(i.coupledBatId))
         : null;
       return {
-        ph: i.phase || (phase === "3ph" ? "3ph" : "1ph"),
+        ph: i.phase || "1ph",
         dc: !!i.hasCoupledBat,
         db: !!(i.hasCoupledBat && i.coupledBatId),
         ms: monitorSolar,
@@ -87,7 +90,8 @@ function buildDiagramConfig(cfg, wireless, monitorSolar, monitorBattery) {
     .filter(b => {
       const found = AC_BATTERIES.find(x => x.id === parseInt(b.id));
       if (!found) return false;
-      const t = found.type === "AC or DC" ? b.mode : found.type;
+      // Standalone batteries with "AC or DC" type default to AC Coupled (DC goes via inverter card)
+      const t = found.type === "AC or DC" ? (b.mode || "AC Coupled") : (found.id === 99 ? "AC Coupled" : found.type);
       return t === "AC Coupled";
     })
     .map(b => {
@@ -98,7 +102,7 @@ function buildDiagramConfig(cfg, wireless, monitorSolar, monitorBattery) {
       };
     });
 
-  // zappi first (controller), then secondary devices in a consistent order
+  // Controller first, then remaining devices
   const ORDER = [
     { id: 2, name: "zappi" },
     { id: 5, name: "eddi+" },
@@ -107,13 +111,24 @@ function buildDiagramConfig(cfg, wireless, monitorSolar, monitorBattery) {
     { id: 6, name: "libbi" },
   ];
   const pr = [];
+  // Add controller device first
+  const ctrlEntry = ORDER.find(p => p.id === controllerProductId);
+  if (ctrlEntry && (selections[controllerProductId] || 0) > 0) {
+    pr.push(ctrlEntry.name);
+  }
+  // Add remaining devices
   ORDER.forEach(({ id, name }) => {
     const qty = selections[id] || 0;
-    for (let q = 0; q < qty; q++) pr.push(name);
+    const skip = id === controllerProductId ? 1 : 0;
+    for (let q = skip; q < qty; q++) pr.push(name);
   });
   if (pr.length === 0) pr.push("zappi");
 
-  return { sp, inv, ab, wl, pr };
+  // If controller only supports 2 CTs, force wireless mode so harvi handles grid
+  const ctrlCaps = CTRL_CTS_MAP[pr[0]] || 3;
+  const wlFinal = wl || ctrlCaps < 3;
+
+  return { sp, inv, ab, wl: wlFinal, pr };
 }
 
 const ICON_URLS = {
@@ -142,10 +157,12 @@ const newBat = () => ({ uid: Math.random(), id: "", mode: "" });
 function resolveStandaloneBatType(bat) {
   const found = AC_BATTERIES.find(b => b.id === parseInt(bat.id));
   if (!found) return null;
-  return found.type === "AC or DC" ? (bat.mode || null) : found.type;
+  if (found.type === "AC or DC") return bat.mode || null;
+  if (found.id === 99) return "AC Coupled"; // "Other" in standalone battery step is always AC
+  return found.type;
 }
 
-function calcResults(cfg, monitorSolar, monitorBattery) {
+function calcResults(cfg, monitorSolar, monitorBattery, controllerProductId) {
   const { phase, inverters, batteries, selections } = cfg;
   if (!phase) return null;
   const is1ph = phase === "1ph", is2ph = phase === "2ph", is3ph = phase === "3ph";
@@ -183,7 +200,8 @@ function calcResults(cfg, monitorSolar, monitorBattery) {
   const gridCTs = validComps.filter(c => c.isGrid).reduce((s, c) => s + c.cts, 0);
 
   const selProds = Object.entries(selections || {}).map(([id, qty]) => ({ ...PRODUCTS.find(p => p.id === parseInt(id)), qty })).filter(p => p?.name && p.qty > 0);
-  const master = selProds.reduce((best, p) => !best || p.ctsSupported > best.ctsSupported ? p : best, null);
+  const ctrlProd = selProds.find(p => p.id === controllerProductId);
+  const master = ctrlProd || selProds.reduce((best, p) => !best || p.ctsSupported > best.ctsSupported ? p : best, null);
   const ctsSupported = master?.ctsSupported || 0;
   const ctsIncluded = selProds.reduce((s, p) => s + p.ctsIncluded * p.qty, 0);
   const additionalCTs = Math.max(0, totalCTs - ctsIncluded);
@@ -196,15 +214,21 @@ function calcResults(cfg, monitorSolar, monitorBattery) {
     const sCTs = validComps.filter(c => c.isSolar).reduce((s, c) => s + c.cts, 0);
     harvisNeeded = 1 + (sCTs > 0 ? Math.ceil(sCTs / 3) : 0);
   } else {
+    // 3ph: solar, AC battery, and DC battery each need dedicated harvis (can't share)
+    const sCTs = validComps.filter(c => c.isSolar).reduce((s, c) => s + c.cts, 0);
     const acBatCTs = validComps.filter(c => c.isBattery && !c.label.startsWith("DC")).reduce((s, c) => s + c.cts, 0);
     const dcCTs = validComps.filter(c => c.isBattery && c.label.startsWith("DC")).reduce((s, c) => s + c.cts, 0);
-    const sCTs = validComps.filter(c => c.isSolar).reduce((s, c) => s + c.cts, 0);
-    harvisNeeded = Math.ceil((sCTs + acBatCTs + dcCTs) / 3);
+    harvisNeeded = (sCTs > 0 ? Math.ceil(sCTs / 3) : 0)
+                 + (acBatCTs > 0 ? Math.ceil(acBatCTs / 3) : 0)
+                 + (dcCTs > 0 ? Math.ceil(dcCTs / 3) : 0);
     if (ctsSupported < gridCTs) harvisNeeded += Math.ceil((gridCTs - ctsSupported) / 3);
   }
 
   const hasSolar = inverters.some(i => i.brand);
-  const hasAcBat = batteries.some(b => resolveStandaloneBatType(b) === "AC Coupled");
+  const hasAcBat = batteries.some(b => {
+    const found = AC_BATTERIES.find(x => x.id === parseInt(b.id));
+    return found && (found.type === "AC Coupled" || found.type === "AC or DC" || found.id === 99);
+  });
 
   return { validComps, totalCTs, gridCTs, solarBatCTs, harvisNeeded, ctsSupported, ctsIncluded, additionalCTs, selProds, master, is2ph, hasSolar, hasAcBat };
 }
@@ -259,7 +283,7 @@ function InverterCard({ inv, phase, onChange, onRemove }) {
 
   const handleBrandChange = (brand) => {
     const meta = INVERTER_BRANDS.find(b => b.name === brand);
-    const autoTick = meta?.allInOne || false;
+    const autoTick = meta?.allInOne || meta?.autoHybrid || false;
     const autoBatId = autoTick && meta?.autoBatId ? String(meta.autoBatId) : "";
     onChange({ ...inv, brand, hasCoupledBat: autoTick, coupledBatId: autoBatId, coupledBatMode: "" });
   };
@@ -352,7 +376,12 @@ function BatteryCard({ bat, onChange, onRemove }) {
       </div>
       <div>
         <SecLabel>Brand / Model</SecLabel>
-        <select value={bat.id} onChange={e => onChange({ ...bat, id: e.target.value, mode: "" })} style={selStyle}>
+        <select value={bat.id} onChange={e => {
+          const sel = AC_BATTERIES.find(b => b.id === parseInt(e.target.value));
+          // Standalone batteries with "AC or DC" type are always AC Coupled (DC goes via inverter card)
+          const defaultMode = sel?.type === "AC or DC" ? "AC Coupled" : "";
+          onChange({ ...bat, id: e.target.value, mode: defaultMode });
+        }} style={selStyle}>
           <option value="">Select battery...</option>
           {AC_BATTERIES.map(b => <option key={b.id} value={b.id}>{b.label}</option>)}
         </select>
@@ -377,6 +406,7 @@ export default function App() {
   const [wireless, setWireless] = useState(false);
   const [monitorSolar, setMonitorSolar] = useState(true);
   const [monitorBattery, setMonitorBattery] = useState(true);
+  const [controllerProductId, setControllerProductId] = useState(2); // default: zappi
 
   const setPhase = v => setCfg(c => ({ ...c, phase: v }));
   const setInverters = fn => setCfg(c => ({ ...c, inverters: fn(c.inverters) }));
@@ -443,7 +473,10 @@ export default function App() {
     document.title = prev;
   };
 
-  const result = useMemo(() => calcResults(cfg, monitorSolar, monitorBattery), [cfg, monitorSolar, monitorBattery]);
+  const result = useMemo(() => calcResults(cfg, monitorSolar, monitorBattery, controllerProductId), [cfg, monitorSolar, monitorBattery, controllerProductId]);
+  const ctrlProdData = PRODUCTS.find(p => p.id === controllerProductId);
+  const ctrlForcesWireless = cfg.phase === "1ph" && !!(ctrlProdData && ctrlProdData.ctsSupported < 3);
+  const effectiveWireless = wireless || ctrlForcesWireless;
   const STEPS = ["Site", "Battery", "Products", "Results"];
   const needsInvPhase = cfg.phase === "3ph" || cfg.phase === "2ph";
   const step0ok = !!cfg.phase;
@@ -453,7 +486,7 @@ export default function App() {
     if (!result) return [];
     const { validComps, ctsSupported } = result;
     const is3ph = cfg.phase === "3ph", is2ph = cfg.phase === "2ph", is1ph = cfg.phase === "1ph";
-    const needsGridHarvi = is2ph || (is3ph && ctsSupported < 3) || (wireless && is1ph);
+    const needsGridHarvi = is2ph || (is3ph && ctsSupported < 3) || (effectiveWireless && is1ph);
     const rows = [];
     const acBatComps = validComps.filter(c => c.isBattery && !c.label.startsWith("DC"));
     const otherComps = validComps.filter(c => !c.isBattery || c.label.startsWith("DC"));
@@ -465,10 +498,10 @@ export default function App() {
         else if (is3ph) { input = "CT1, CT2, CT3 (one per phase)"; routing = "device"; }
         else { input = "CT1"; routing = "device"; }
       } else if (comp.isSolar) {
-        if (wireless || is3ph || is2ph) { input = wireless && is1ph ? "harvi — CT2" : "harvi — pair wirelessly"; routing = "harvi"; }
+        if (effectiveWireless || is3ph || is2ph) { input = effectiveWireless && is1ph ? "harvi — CT2" : "harvi — pair wirelessly"; routing = "harvi"; }
         else { input = "CT2"; routing = "device"; }
       } else {
-        if (wireless || is3ph || is2ph) { input = "harvi — pair wirelessly"; routing = "harvi"; }
+        if (effectiveWireless || is3ph || is2ph) { input = "harvi — pair wirelessly"; routing = "harvi"; }
         else { input = "CT3"; routing = "device"; }
       }
       rows.push({ component: comp.label, type: comp.isGrid ? "Grid" : comp.isSolar ? "Generation Only" : "Gen & Battery", input, routing, note, cts: comp.cts });
@@ -478,17 +511,29 @@ export default function App() {
       const totalAcCTs = acBatComps.reduce((s, c) => s + c.cts, 0);
       const label = acBatComps.length === 1 ? acBatComps[0].label : `AC Batteries (${acBatComps.length} units)`;
       let input, routing;
-      if (wireless || is3ph || is2ph) { input = `harvi — pair wirelessly (${totalAcCTs} CT${totalAcCTs > 1 ? "s" : ""} share 1 harvi)`; routing = "harvi"; }
+      if (effectiveWireless || is3ph || is2ph) { input = `harvi — pair wirelessly (${totalAcCTs} CT${totalAcCTs > 1 ? "s" : ""} share 1 harvi)`; routing = "harvi"; }
       else { input = "CT3"; routing = "device"; }
       rows.push({ component: label, type: "AC Battery", input, routing, note: acBatComps.length > 1 ? `${acBatComps.length} AC batteries share one harvi — connect each CT to available inputs on the same harvi unit.` : null, cts: totalAcCTs });
     }
     return rows;
-  }, [result, cfg, wireless, monitorSolar, monitorBattery]);
+  }, [result, cfg, effectiveWireless, monitorSolar, monitorBattery]);
 
-  const incr = id => setCfg(c => { const tot = Object.values(c.selections).reduce((s,q)=>s+q,0); if(tot>=5) return c; return {...c, selections:{...c.selections,[id]:(c.selections[id]||0)+1}}; });
-  const decr = id => setCfg(c => ({...c, selections:{...c.selections,[id]:Math.max(0,(c.selections[id]||0)-1)}}));
+  const incr = id => {
+    const tot = Object.values(cfg.selections).reduce((s,q)=>s+q,0);
+    if (tot >= 5) return;
+    setCfg(c => ({...c, selections:{...c.selections,[id]:(c.selections[id]||0)+1}}));
+    if (!(cfg.selections[controllerProductId] > 0)) setControllerProductId(id);
+  };
+  const decr = id => {
+    const newQty = Math.max(0, (cfg.selections[id]||0)-1);
+    setCfg(c => ({...c, selections:{...c.selections,[id]:newQty}}));
+    if (newQty === 0 && id === controllerProductId) {
+      const remaining = PRODUCTS.find(p => p.id !== id && (cfg.selections[p.id]||0) > 0);
+      setControllerProductId(remaining ? remaining.id : 2);
+    }
+  };
   const goToResults = () => { setMonitorSolar(true); setMonitorBattery(true); setStep(3); };
-  const resetAll = () => { setStep(0);       setCfg({ phase: null, inverters: [], batteries: [], selections: {}, noSolar: false }); setWireless(false); setMonitorSolar(true); setMonitorBattery(true); };
+  const resetAll = () => { setStep(0); setCfg({ phase: null, inverters: [], batteries: [], selections: {}, noSolar: false }); setWireless(false); setMonitorSolar(true); setMonitorBattery(true); setControllerProductId(2); };
 
   return (
     <div id="sb-app" style={{ background: DARK, minHeight: "100vh", fontFamily: "'Overpass', sans-serif", color: "#ddd", maxWidth: 660, margin: "0 auto" }}>
@@ -581,6 +626,12 @@ export default function App() {
                         <div>
                           <div style={{ fontSize: 14, color: qty > 0 ? G : "#ddd", fontWeight: qty > 0 ? 700 : 400 }}>{p.name}</div>
                           <div style={{ fontSize: 11, color: MUTED, marginTop: 3 }}>{p.ctsIncluded} CT{p.ctsIncluded !== 1 ? "s" : ""} included · supports {p.ctsSupported} CT{p.ctsSupported !== 1 ? "s" : ""}</div>
+                          {qty > 0 && (
+                            <div onClick={() => setControllerProductId(p.id)} style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 5, cursor: "pointer" }}>
+                              <div style={{ width: 12, height: 12, borderRadius: "50%", border: `2px solid ${controllerProductId === p.id ? G : MUTED}`, background: controllerProductId === p.id ? G : "transparent", flexShrink: 0 }}/>
+                              <span style={{ fontSize: 10, color: controllerProductId === p.id ? G : MUTED }}>{controllerProductId === p.id ? "Controller (receives CTs)" : "Set as controller"}</span>
+                            </div>
+                          )}
                         </div>
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -602,8 +653,8 @@ export default function App() {
 
         {/* STEP 3 */}
         {step === 3 && result && (() => {
-          const harviTotal = result.harvisNeeded + (wireless && cfg.phase === "1ph" ? 1 : 0);
-          const diagramConfig = buildDiagramConfig(cfg, wireless, monitorSolar, monitorBattery);
+          const harviTotal = result.harvisNeeded + (effectiveWireless && cfg.phase === "1ph" ? 1 : 0);
+          const diagramConfig = buildDiagramConfig(cfg, effectiveWireless, monitorSolar, monitorBattery, controllerProductId);
           return (
             <div id="results-page">
               <h2 style={{ margin: "0 0 16px", color: "#fff", fontWeight: 800, fontStyle: "italic", fontSize: 18 }}>System Summary</h2>
@@ -627,9 +678,29 @@ export default function App() {
                 </div>
               )}
 
-              {cfg.phase === "1ph" && (
+              {result.selProds.length > 1 && (
+                <div style={{ marginBottom: 16 }}>
+                  <SecLabel>Controller Device</SecLabel>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 6 }}>
+                    {result.selProds.map(p => (
+                      <div key={p.id} onClick={() => setControllerProductId(p.id)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", background: controllerProductId === p.id ? "rgba(64,255,122,0.1)" : CARD, border: `1px solid ${controllerProductId === p.id ? G : BORDER}`, borderRadius: 20, cursor: "pointer" }}>
+                        <div style={{ width: 10, height: 10, borderRadius: "50%", border: `2px solid ${controllerProductId === p.id ? G : MUTED}`, background: controllerProductId === p.id ? G : "transparent", flexShrink: 0 }}/>
+                        <span style={{ fontSize: 11, color: controllerProductId === p.id ? G : "#bbb" }}>{p.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ fontSize: 11, color: MUTED }}>The controller receives CT inputs. Other devices run as secondary.</div>
+                </div>
+              )}
+
+              {cfg.phase === "1ph" && !ctrlForcesWireless && (
                 <div style={{ marginBottom: 20 }}>
                   <Checkbox checked={wireless} onChange={() => setWireless(w => !w)} label="Use wireless CT connection (harvi)" sub="Tick if CTs will connect via harvi instead of directly to the myenergi device" color={YELLOW}/>
+                </div>
+              )}
+              {cfg.phase === "1ph" && ctrlForcesWireless && (
+                <div style={{ marginBottom: 20, padding: "10px 14px", background: "rgba(255,224,102,0.08)", border: `1px solid rgba(255,224,102,0.3)`, borderRadius: 6, fontSize: 12, color: YELLOW }}>
+                  ⚠ Wireless CT connection (harvi) is required — the selected controller device only supports 2 CT inputs.
                 </div>
               )}
 
@@ -660,7 +731,7 @@ export default function App() {
                             <td style={{ ...tdr(i), color: BLUE }}>{row.type}</td>
                             <td style={{ ...tdr(i), color: row.routing === "harvi" ? YELLOW : MUTED }}>{row.input}</td>
                             <td style={{ ...tdr(i), color: row.routing === "harvi" ? YELLOW : MUTED }}>
-                              {row.routing === "harvi" && wireless && cfg.phase === "1ph" ? `→ wire to harvi, pair with ${result.master?.name || "myenergi device"}` : row.routing === "harvi" ? "→ harvi" : "→ wire to myenergi device"}
+                              {row.routing === "harvi" && effectiveWireless && cfg.phase === "1ph" ? `→ wire to harvi, pair with ${result.master?.name || "myenergi device"}` : row.routing === "harvi" ? "→ harvi" : "→ wire to myenergi device"}
                             </td>
                           </tr>
                           {row.note && <tr><td colSpan={5} style={{ padding: "6px 10px 10px", background: i % 2 === 0 ? CARD : "#161616", borderBottom: `1px solid ${BORDER}` }}><div style={{ padding: "7px 10px", background: "rgba(255,224,102,0.08)", border: "1px solid rgba(255,224,102,0.3)", borderRadius: 5, fontSize: 11, color: YELLOW }}>⚠️ {row.note}</div></td></tr>}
@@ -700,9 +771,11 @@ export default function App() {
                 </table>
               </div>
 
-              <div style={{ marginBottom: 24 }}>
-                <div style={{ fontSize: 10, color: MUTED, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>Wiring Diagram</div>
-                <Diagram config={diagramConfig} />
+              <div style={{ marginBottom: 24, marginLeft: -48, marginRight: -48 }}>
+                <div style={{ fontSize: 10, color: MUTED, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8, paddingLeft: 48 }}>Wiring Diagram</div>
+                <div style={{ padding: "0 54px" }}>
+                  <Diagram config={diagramConfig} />
+                </div>
               </div>
 
               <div style={{ marginBottom: 32 }}>
