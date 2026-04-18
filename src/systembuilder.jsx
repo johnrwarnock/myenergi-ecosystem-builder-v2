@@ -516,7 +516,7 @@ function AppPreview({ cfg, result }) {
   );
 
   return (
-    <svg viewBox="0 0 375 667" style={{ width: "100%", display: "block", borderRadius: 8 }}>
+    <svg viewBox="0 0 375 667" style={{ width: 210, display: "block", margin: "0 auto", borderRadius: 12 }}>
       {/* ── background ── */}
       <rect width="375" height="667" fill="#1a1a1a"/>
 
@@ -1093,7 +1093,7 @@ export default function App() {
                     <div style={{ fontSize: 11, color: MUTED, background: CARD, padding: "3px 8px", borderRadius: 4 }}>Preview</div>
                   </div>
                   {/* Live app preview */}
-                  <div style={{ padding: "16px 16px 8px", background: "#111" }}>
+                  <div style={{ padding: "20px 16px 16px", background: "#111", display: "flex", justifyContent: "center" }}>
                     <AppPreview cfg={cfg} result={result}/>
                   </div>
                 </div>
