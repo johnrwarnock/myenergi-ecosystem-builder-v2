@@ -9,14 +9,14 @@ import eddiPlusImgUrl from "./eddi+.svg";
 import gloImgUrl    from "./GLO.svg";
 
 const G     = "#40ff7a";   // myenergi green (borders)
-const G_TXT = "#1a6b35";   // dark green text for controller boxes
-const DARK  = "#ffffff";   // diagram / page background (white)
-const YELLOW= "#b07700";   // harvi / secondary amber (darkened for white bg)
-const WHITE = "#111111";   // power lines (heavy black)
+const G_TXT = "#40ff7a";   // green text (bright on dark)
+const DARK  = "#111111";   // diagram / page background (dark)
+const YELLOW= "#ff008c";   // harvi / Accent 2
+const WHITE = "#ffffff";   // power lines (white on dark)
 const MUTED = "#888";
-const CT_COL= "#555";
-const SIG   = "#aaa";
-const BOX_BG= "#f2f2f2";   // infrastructure box fill
+const CT_COL= "#aaa";
+const SIG   = "#666";
+const BOX_BG= "#343434";   // infrastructure box fill
 const phSp  = 7;
 
 const DEVICE_IMGS = {
@@ -48,7 +48,7 @@ const CONFIGS = {
 
 const CT = ({ x, y, label }) => (
   <g>
-    <rect x={x-5} y={y-8} width={10} height={16} rx={1.5} fill={CT_COL} stroke="#333" strokeWidth={0.8}/>
+    <rect x={x-5} y={y-8} width={10} height={16} rx={1.5} fill={CT_COL} stroke="#555" strokeWidth={0.8}/>
     {label && <text x={x} y={y+22} textAnchor="middle" fill={CT_COL} fontSize={7} fontWeight="700" fontFamily="Overpass,sans-serif">{label}</text>}
   </g>
 );
@@ -66,9 +66,9 @@ const Blk = ({ x, y, w=80, h=36, label, sub, bc=WHITE, lc=WHITE, bg=BOX_BG, labe
 const BatIcon = ({ x, y, w=50, h=38, label="BATTERY" }) => (
   <g>
     <rect x={x} y={y} width={w} height={h} rx={3} fill={BOX_BG} stroke="#666" strokeWidth={1.5}/>
-    <line x1={x} y1={y+h*0.35} x2={x+w} y2={y+h*0.35} stroke="#bbb" strokeWidth={0.8}/>
-    <line x1={x} y1={y+h*0.68} x2={x+w} y2={y+h*0.68} stroke="#bbb" strokeWidth={0.8}/>
-    <rect x={x+w*0.32} y={y+h*0.74} width={w*0.36} height={h*0.18} rx={2} fill="none" stroke="#aaa" strokeWidth={1}/>
+    <line x1={x} y1={y+h*0.35} x2={x+w} y2={y+h*0.35} stroke="#555" strokeWidth={0.8}/>
+    <line x1={x} y1={y+h*0.68} x2={x+w} y2={y+h*0.68} stroke="#555" strokeWidth={0.8}/>
+    <rect x={x+w*0.32} y={y+h*0.74} width={w*0.36} height={h*0.18} rx={2} fill="none" stroke="#666" strokeWidth={1}/>
     <text x={x+w/2} y={y+h+12} textAnchor="middle" fill={WHITE} fontSize={8} fontWeight="700" fontFamily="Overpass,sans-serif">{label}</text>
   </g>
 );
@@ -101,8 +101,48 @@ const WiFi = ({ cx, cy, size=13, rotate=0, color=YELLOW }) => {
   );
 };
 
+// Appliance icon symbols for eddi connections
+const ApplianceIcon = ({ x, y, type, label }) => {
+  const w = 44, h = 32;
+  const icons = {
+    "hot-water": (
+      <g>
+        <ellipse cx={x+w/2} cy={y+6} rx={10} ry={5} fill={BOX_BG} stroke="#666" strokeWidth={1.2}/>
+        <rect x={x+w/2-10} y={y+6} width={20} height={18} fill={BOX_BG} stroke="#666" strokeWidth={1.2}/>
+        <ellipse cx={x+w/2} cy={y+24} rx={10} ry={5} fill="#444" stroke="#666" strokeWidth={1.2}/>
+        <path d={`M${x+w/2-4},${y+13} q2,-4 4,0 q2,4 4,0`} stroke="#666" strokeWidth={1} fill="none"/>
+      </g>
+    ),
+    "underfloor": (
+      <g>
+        <rect x={x+2} y={y+4} width={w-4} height={h-8} rx={2} fill={BOX_BG} stroke="#666" strokeWidth={1.2}/>
+        {[0,1,2].map(i => <path key={i} d={`M${x+6},${y+10+i*6} q4,-3 8,0 q4,3 8,0 q4,-3 6,0`} stroke="#666" strokeWidth={1} fill="none"/>)}
+      </g>
+    ),
+    "pool": (
+      <g>
+        <rect x={x+2} y={y+4} width={w-4} height={h-8} rx={8} fill={BOX_BG} stroke="#666" strokeWidth={1.2}/>
+        <path d={`M${x+8},${y+14} q5,-4 10,0 q5,4 10,0 q5,-4 8,0`} stroke="#666" strokeWidth={1.2} fill="none"/>
+        <path d={`M${x+8},${y+20} q5,-4 10,0 q5,4 10,0 q5,-4 8,0`} stroke="#666" strokeWidth={1.2} fill="none"/>
+      </g>
+    ),
+    "radiator": (
+      <g>
+        <rect x={x+2} y={y+4} width={w-4} height={h-8} rx={2} fill={BOX_BG} stroke="#666" strokeWidth={1.2}/>
+        {[0,1,2,3].map(i => <rect key={i} x={x+6+i*9} y={y+7} width={5} height={h-14} rx={1} fill="#444" stroke="#666" strokeWidth={0.8}/>)}
+      </g>
+    ),
+  };
+  return (
+    <g>
+      {icons[type] || <rect x={x+2} y={y+4} width={w-4} height={h-8} rx={3} fill={BOX_BG} stroke="#666" strokeWidth={1.2}/>}
+      <text x={x+w/2} y={y+h+12} textAnchor="middle" fill={WHITE} fontSize={7} fontFamily="Overpass,sans-serif">{label}</text>
+    </g>
+  );
+};
+
 export function Diagram({ config }) {
-  const { sp, inv, ab, wl, pr } = config;
+  const { sp, inv, ab, wl, pr, appliancesList = [] } = config;
   const hasLibbi      = pr.includes("libbi");
   const libbiIsBat_dc = hasLibbi && inv.some(v=>v.dc&&v.db);
   const libbiIsBat_ac = hasLibbi && ab.length > 0;
@@ -359,6 +399,44 @@ export function Diagram({ config }) {
         </g>
       ))}
 
+      {/* Eddi appliances — drawn to the left of each eddi/eddi+ device */}
+      {(() => {
+        const APPLIANCE_LABELS = { "hot-water":"Hot Water", "underfloor":"Underfloor", "pool":"Pool/Spa", "radiator":"Radiator", "other":"Appliance" };
+        const appW = 44, appH = 32, appGap = 10;
+        let eddiIdx = 0;
+        return devPositions.map((d, di) => {
+          if (d.name !== "eddi" && d.name !== "eddi+") return null;
+          const entry = appliancesList[eddiIdx++] || {};
+          const apps = [entry.app1, entry.app2].filter(Boolean);
+          if (apps.length === 0) return null;
+          const devLeftX = d.cx - devWOf(d.name) / 2;
+          const startX = devLeftX - 16;
+          const totalH = apps.length * appH + (apps.length - 1) * appGap;
+          const devMidY = d.y + devHOf(d.name) / 2;
+          const firstY = devMidY - totalH / 2;
+          return (
+            <g key={`app-${di}`}>
+              {apps.map((app, ai) => {
+                const ay = firstY + ai * (appH + appGap);
+                const iconX = startX - appW - 8;
+                const connY = ay + appH / 2;
+                return (
+                  <g key={ai}>
+                    <line x1={startX} y1={connY} x2={iconX + appW} y2={connY} stroke={WHITE} strokeWidth={1.8}/>
+                    <ApplianceIcon x={iconX} y={ay} type={app} label={APPLIANCE_LABELS[app] || "Appliance"}/>
+                  </g>
+                );
+              })}
+              {/* Tap from device left edge to first appliance branch */}
+              <line x1={devLeftX} y1={devMidY} x2={startX} y2={devMidY} stroke={WHITE} strokeWidth={1.8}/>
+              {apps.length > 1 && (
+                <line x1={startX} y1={firstY + appH/2} x2={startX} y2={firstY + appH + appGap + appH/2} stroke={WHITE} strokeWidth={1.8}/>
+              )}
+            </g>
+          );
+        });
+      })()}
+
       {/* AC Battery — rendered independently of solar so it appears even with no inverter */}
       {hasACBat && (
         <>
@@ -426,9 +504,9 @@ export function Diagram({ config }) {
                 )}
                 <line x1={invRightX} y1={cy} x2={pvX} y2={cy} stroke={WHITE} strokeWidth={2.5}/>
                 <g>
-                  <rect x={pvX} y={cy-pvH/2} width={pvW} height={pvH} rx={3} fill="#e8ede8" stroke="#666" strokeWidth={1.5}/>
+                  <rect x={pvX} y={cy-pvH/2} width={pvW} height={pvH} rx={3} fill="#1a2a1a" stroke="#555" strokeWidth={1.5}/>
                   {[0,1,2].map(c=>[0,1].map(r=>(
-                    <rect key={`${c}${r}`} x={pvX+4+c*18} y={cy-pvH/2+5+r*15} width={13} height={11} rx={1} fill="none" stroke="#ccc" strokeWidth={1}/>
+                    <rect key={`${c}${r}`} x={pvX+4+c*18} y={cy-pvH/2+5+r*15} width={13} height={11} rx={1} fill="none" stroke="#444" strokeWidth={1}/>
                   )))}
                   <text x={pvX+pvW/2} y={cy+pvH/2+13} textAnchor="middle" fill={WHITE} fontSize={8} fontWeight="700" fontFamily="Overpass,sans-serif">
                     {multiInv?`PV ARRAY ${i+1}`:"PV ARRAY"}
