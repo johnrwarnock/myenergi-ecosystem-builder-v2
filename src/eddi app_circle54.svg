@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="64"
+   height="64"
+   viewBox="0 0 64 64"
+   fill="none"
+   version="1.1"
+   id="svg222"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <circle
+     cx="32"
+     cy="32"
+     r="31"
+     fill="url(#paint36_radial_21863_143612)"
+     stroke="#00e6c0"
+     stroke-width="2"
+     id="circle54"
+     style="fill:url(#paint36_radial_21863_143612)" />
+  <defs
+     id="defs222">
+    <radialGradient
+       id="paint36_radial_21863_143612"
+       cx="0"
+       cy="0"
+       r="1"
+       gradientUnits="userSpaceOnUse"
+       gradientTransform="matrix(0,32,-32,0,32,32)">
+      <stop
+         stop-color="#4B4B4B"
+         id="stop217" />
+      <stop
+         offset="1"
+         stop-color="#292525"
+         id="stop218" />
+    </radialGradient>
+  </defs>
+</svg>
