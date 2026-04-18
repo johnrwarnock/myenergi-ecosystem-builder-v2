@@ -322,19 +322,19 @@ function generatePlainEnglish(result, ctConfig, effectiveWireless, cfg, harviTot
 
 // ── Shared UI components ─────────────────────────────────────────────────────
 const SelBtn = ({ active, onClick, children }) => (
-  <button onClick={onClick} style={{ padding: "9px 20px", borderRadius: 999, cursor: "pointer", fontSize: 13, border: `1px solid ${active ? G : BORDER}`, background: active ? G : CARD, color: active ? "#000" : "#aaa", fontFamily: "inherit", transition: "all 0.15s", whiteSpace: "nowrap", fontWeight: active ? 700 : 400 }}>{children}</button>
+  <button onClick={onClick} style={{ padding: "9px 20px", borderRadius: 999, cursor: "pointer", fontSize: 14, border: `1px solid ${active ? G : BORDER}`, background: active ? G : CARD, color: active ? "#000" : "#aaa", fontFamily: "inherit", transition: "all 0.15s", whiteSpace: "nowrap", fontWeight: active ? 700 : 400 }}>{children}</button>
 );
 const SecLabel = ({ children }) => (
-  <div style={{ fontSize: 10, color: MUTED, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>{children}</div>
+  <div style={{ fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>{children}</div>
 );
 const NextBtn = ({ onClick, disabled, children }) => (
-  <button onClick={onClick} disabled={disabled} style={{ background: disabled ? BORDER : G, color: disabled ? MUTED : "#000", border: "none", borderRadius: 999, padding: "11px 28px", fontSize: 13, fontWeight: 700, cursor: disabled ? "not-allowed" : "pointer", fontFamily: "inherit" }}>{children}</button>
+  <button onClick={onClick} disabled={disabled} style={{ background: disabled ? BORDER : G, color: disabled ? MUTED : "#000", border: "none", borderRadius: 999, padding: "12px 30px", fontSize: 14, fontWeight: 700, cursor: disabled ? "not-allowed" : "pointer", fontFamily: "inherit" }}>{children}</button>
 );
 const BackBtn = ({ onClick }) => (
-  <button onClick={onClick} style={{ background: "none", border: `1px solid ${BORDER}`, color: "#aaa", borderRadius: 999, padding: "11px 24px", fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>← Back</button>
+  <button onClick={onClick} style={{ background: "none", border: `1px solid ${BORDER}`, color: "#aaa", borderRadius: 999, padding: "12px 26px", fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>← Back</button>
 );
 const AddBtn = ({ onClick, children }) => (
-  <button onClick={onClick} style={{ display: "flex", alignItems: "center", gap: 8, background: "none", border: `1px dashed ${BORDER}`, color: G_TXT, borderRadius: 999, padding: "10px 20px", fontSize: 13, cursor: "pointer", fontFamily: "inherit", width: "100%", marginTop: 8, justifyContent: "center" }}>
+  <button onClick={onClick} style={{ display: "flex", alignItems: "center", gap: 8, background: "none", border: `1px dashed ${BORDER}`, color: G_TXT, borderRadius: 999, padding: "11px 20px", fontSize: 14, cursor: "pointer", fontFamily: "inherit", width: "100%", marginTop: 8, justifyContent: "center" }}>
     <span style={{ fontSize: 20, lineHeight: 1, fontWeight: 300 }}>+</span> {children}
   </button>
 );
@@ -347,20 +347,20 @@ const Checkbox = ({ checked, onChange, label, sub, color }) => {
         {checked && <span style={{ color: "#000", fontSize: 13, fontWeight: 900, lineHeight: 1 }}>✓</span>}
       </div>
       <div>
-        <div style={{ fontSize: 13, color: checked ? txtCol : "#ccc" }}>{label}</div>
-        {sub && <div style={{ fontSize: 11, color: MUTED, marginTop: 2 }}>{sub}</div>}
+        <div style={{ fontSize: 14, color: checked ? txtCol : "#ccc" }}>{label}</div>
+        {sub && <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>{sub}</div>}
       </div>
     </div>
   );
 };
 
-const selStyle = { background: CARD, border: `1px solid ${BORDER}`, color: "#ddd", borderRadius: 6, padding: "9px 12px", fontSize: 13, fontFamily: "inherit", outline: "none", width: "100%", boxSizing: "border-box" };
-const th = { textAlign: "left", padding: "7px 10px", background: "#2a2a2a", color: "#ddd", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: `1px solid ${BORDER}` };
-const tdr = i => ({ padding: "8px 10px", background: i % 2 === 0 ? CARD : "#1a1a1a", borderBottom: `1px solid ${BORDER}`, fontSize: 12 });
+const selStyle = { background: CARD, border: `1px solid ${BORDER}`, color: "#ddd", borderRadius: 6, padding: "9px 12px", fontSize: 14, fontFamily: "inherit", outline: "none", width: "100%", boxSizing: "border-box" };
+const th = { textAlign: "left", padding: "7px 10px", background: "#2a2a2a", color: "#ddd", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: `1px solid ${BORDER}` };
+const tdr = i => ({ padding: "8px 10px", background: i % 2 === 0 ? CARD : "#1a1a1a", borderBottom: `1px solid ${BORDER}`, fontSize: 13 });
 const statBox = (label, val, col) => (
   <div style={{ flex: 1, padding: "14px 10px", background: CARD, borderRadius: 8, border: `1px solid ${BORDER}`, textAlign: "center" }}>
-    <div style={{ fontSize: 28, fontWeight: 800, color: col }}>{val}</div>
-    <div style={{ fontSize: 10, color: MUTED, textTransform: "uppercase", letterSpacing: "0.05em", marginTop: 4 }}>{label}</div>
+    <div style={{ fontSize: 32, fontWeight: 800, color: col }}>{val}</div>
+    <div style={{ fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: "0.05em", marginTop: 4 }}>{label}</div>
   </div>
 );
 
@@ -389,7 +389,7 @@ function InverterCard({ inv, phase, onChange, onRemove }) {
   return (
     <div style={{ background: CARD, border: `1px solid ${inv.brand ? G : BORDER}`, borderRadius: 8, padding: "14px 16px", marginBottom: 8 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-        <span style={{ fontSize: 12, color: inv.brand ? G_TXT : MUTED, fontWeight: 600 }}>
+        <span style={{ fontSize: 13, color: inv.brand ? G_TXT : MUTED, fontWeight: 600 }}>
           {inv.brand ? (inv.hasCoupledBat && coupledBat ? `${inv.brand} + ${coupledBat.label}` : inv.brand) : "Solar inverter"}
         </span>
         <button onClick={onRemove} style={{ background: "none", border: "none", color: "#aaa", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: 0 }}>×</button>
@@ -421,8 +421,8 @@ function InverterCard({ inv, phase, onChange, onRemove }) {
               {inv.hasCoupledBat && <span style={{ color: "#000", fontSize: 11, fontWeight: 900, lineHeight: 1 }}>✓</span>}
             </div>
             <div>
-              <div style={{ fontSize: 12, color: inv.hasCoupledBat ? G_TXT : "#ccc" }}>This is a hybrid inverter with a coupled DC battery</div>
-              <div style={{ fontSize: 11, color: MUTED, marginTop: 1 }}>Solar and battery share one inverter — only one CT required</div>
+              <div style={{ fontSize: 13, color: inv.hasCoupledBat ? G_TXT : "#ccc" }}>This is a hybrid inverter with a coupled DC battery</div>
+              <div style={{ fontSize: 12, color: MUTED, marginTop: 1 }}>Solar and battery share one inverter — only one CT required</div>
             </div>
           </div>
 
@@ -439,7 +439,7 @@ function BatteryCard({ bat, onChange, onRemove }) {
   return (
     <div style={{ background: CARD, border: `1px solid ${bat.id ? G : BORDER}`, borderRadius: 8, padding: "14px 16px", marginBottom: 8 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-        <span style={{ fontSize: 12, color: bat.id ? G_TXT : MUTED, fontWeight: 600 }}>{found?.label || "Battery"}</span>
+        <span style={{ fontSize: 13, color: bat.id ? G_TXT : MUTED, fontWeight: 600 }}>{found?.label || "Battery"}</span>
         <button onClick={onRemove} style={{ background: "none", border: "none", color: "#aaa", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: 0 }}>×</button>
       </div>
       <div>
@@ -459,7 +459,7 @@ function BatteryCard({ bat, onChange, onRemove }) {
           <div style={{ display: "flex", gap: 8 }}>
             <SelBtn active={bat.mode === "AC Coupled"} onClick={() => onChange({ ...bat, mode: "AC Coupled" })}>AC Coupled</SelBtn>
           </div>
-          <div style={{ marginTop: 6, fontSize: 11, color: MUTED }}>For DC coupled installation, add this battery via the inverter card on the Your Property step.</div>
+          <div style={{ marginTop: 6, fontSize: 12, color: MUTED }}>For DC coupled installation, add this battery via the inverter card on the Your Property step.</div>
         </div>
       )}
     </div>
@@ -470,17 +470,17 @@ function BatteryCard({ bat, onChange, onRemove }) {
 function EddiApplianceSelector({ unit, idx, onChange }) {
   return (
     <div style={{ marginTop: 10, padding: "10px 14px", background: CARD, border: `1px solid ${BORDER}`, borderRadius: 6, borderLeft: `3px solid ${G}` }}>
-      <div style={{ fontSize: 11, color: G_TXT, fontWeight: 700, marginBottom: 8 }}>
+      <div style={{ fontSize: 12, color: G_TXT, fontWeight: 700, marginBottom: 8 }}>
         {unit} — appliances (unit {idx + 1})
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
         {["app1", "app2"].map((key, ai) => (
           <div key={key}>
-            <div style={{ fontSize: 10, color: MUTED, marginBottom: 4 }}>Appliance {ai + 1} (optional)</div>
+            <div style={{ fontSize: 11, color: MUTED, marginBottom: 4 }}>Appliance {ai + 1} (optional)</div>
             <select
               value={onChange.data[key]}
               onChange={e => onChange.set(key, e.target.value)}
-              style={{ ...selStyle, fontSize: 12 }}>
+              style={{ ...selStyle, fontSize: 13 }}>
               {APPLIANCE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
@@ -648,7 +648,7 @@ export default function App() {
       <div id="step-tabs" style={{ display: "flex", background: DARK, borderBottom: `2px solid ${BORDER}` }}>
         {STEPS.map((s, i) => (
           <div key={i} onClick={() => i < step && setStep(i)} style={{
-            flex: 1, padding: "10px 4px", textAlign: "center", fontSize: 9,
+            flex: 1, padding: "10px 4px", textAlign: "center", fontSize: 11,
             color: i === step ? G_TXT : i < step ? "#888" : "#bbb",
             borderBottom: i === step ? `2px solid ${G}` : "2px solid transparent",
             cursor: i < step ? "pointer" : "default",
@@ -665,8 +665,8 @@ export default function App() {
         {/* ── STEP 0 — Your Property ─────────────────────────────────────────── */}
         {step === 0 && (
           <div>
-            <h2 style={{ margin: "0 0 4px", color: "#fff", fontWeight: 800, fontStyle: "italic", fontSize: 18 }}>Your Property</h2>
-            <p style={{ margin: "0 0 22px", fontSize: 12, color: MUTED }}>Tell us about your electricity supply and any solar panels already installed.</p>
+            <h2 style={{ margin: "0 0 4px", color: "#fff", fontWeight: 800, fontStyle: "italic", fontSize: 22 }}>Your Property</h2>
+            <p style={{ margin: "0 0 22px", fontSize: 13, color: MUTED }}>Tell us about your electricity supply and any solar panels already installed.</p>
 
             <div style={{ marginBottom: 24 }}>
               <SecLabel>Supply Phase</SecLabel>
@@ -700,7 +700,7 @@ export default function App() {
             {/* Standalone Battery — AC coupled only */}
             <div style={{ marginBottom: 24 }}>
               <SecLabel>Standalone Battery (AC Coupled)</SecLabel>
-              <p style={{ margin: "0 0 10px", fontSize: 11, color: MUTED }}>For batteries that connect directly to your switchboard. If your battery came bundled with your inverter, add it via the inverter card above.</p>
+              <p style={{ margin: "0 0 10px", fontSize: 12, color: MUTED }}>For batteries that connect directly to your switchboard. If your battery came bundled with your inverter, add it via the inverter card above.</p>
               {cfg.batteries.map((bat, i) => (
                 <BatteryCard key={bat.uid} bat={bat}
                   onChange={updated => setBatteries(prev => prev.map((x, j) => j === i ? updated : x))}
@@ -723,9 +723,9 @@ export default function App() {
           const atLimit = totalDevices >= 5;
           return (
             <div>
-              <h2 style={{ margin: "0 0 4px", color: "#fff", fontWeight: 800, fontStyle: "italic", fontSize: 18 }}>myenergi Devices</h2>
-              <p style={{ margin: "0 0 12px", fontSize: 12, color: MUTED }}>Select the myenergi devices being installed. One device acts as the controller — the others run as secondary.</p>
-              <div style={{ marginBottom: 14, fontSize: 12, color: atLimit ? WARN : MUTED }}>
+              <h2 style={{ margin: "0 0 4px", color: "#fff", fontWeight: 800, fontStyle: "italic", fontSize: 22 }}>myenergi Devices</h2>
+              <p style={{ margin: "0 0 12px", fontSize: 13, color: MUTED }}>Select the myenergi devices being installed. One device acts as the controller — the others run as secondary.</p>
+              <div style={{ marginBottom: 14, fontSize: 13, color: atLimit ? WARN : MUTED }}>
                 Devices selected: <span style={{ fontWeight: 700, color: atLimit ? WARN : G_TXT }}>{totalDevices} / 5</span>
                 {atLimit && <span style={{ marginLeft: 8 }}>— Maximum reached</span>}
               </div>
@@ -751,17 +751,17 @@ export default function App() {
                           {/* Text */}
                           <div style={{ minWidth: 0 }}>
                             <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-                              <span style={{ fontSize: 15, color: isActive ? G_TXT : "#ddd", fontWeight: 700 }}>{p.friendlyName}</span>
-                              <span style={{ fontSize: 11, color: isActive ? G_TXT : MUTED, fontWeight: 600 }}>— {p.tagline}</span>
+                              <span style={{ fontSize: 16, color: isActive ? G_TXT : "#ddd", fontWeight: 700 }}>{p.friendlyName}</span>
+                              <span style={{ fontSize: 12, color: isActive ? G_TXT : MUTED, fontWeight: 600 }}>— {p.tagline}</span>
                             </div>
-                            <div style={{ fontSize: 11, color: MUTED, marginTop: 3, lineHeight: 1.4 }}>{p.desc}</div>
-                            <div style={{ fontSize: 10, color: MUTED, marginTop: 4 }}>
+                            <div style={{ fontSize: 12, color: MUTED, marginTop: 3, lineHeight: 1.4 }}>{p.desc}</div>
+                            <div style={{ fontSize: 11, color: MUTED, marginTop: 4 }}>
                               {p.ctsIncluded} CT{p.ctsIncluded !== 1 ? "s" : ""} included · supports {p.ctsSupported} CT{p.ctsSupported !== 1 ? "s" : ""}
                             </div>
                             {isActive && (
                               <div onClick={() => setControllerProductId(p.id)} style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 6, cursor: "pointer" }}>
                                 <div style={{ width: 12, height: 12, borderRadius: "50%", border: `2px solid ${controllerProductId === p.id ? G : "#bbb"}`, background: controllerProductId === p.id ? G : "transparent", flexShrink: 0 }}/>
-                                <span style={{ fontSize: 10, color: controllerProductId === p.id ? G_TXT : MUTED }}>
+                                <span style={{ fontSize: 11, color: controllerProductId === p.id ? G_TXT : MUTED }}>
                                   {controllerProductId === p.id ? "Controller (receives CTs)" : "Set as controller"}
                                 </span>
                               </div>
@@ -816,7 +816,7 @@ export default function App() {
           const plainEnglish = generatePlainEnglish(result, ctConfig, effectiveWireless, cfg, harviTotal);
           return (
             <div id="results-page">
-              <h2 style={{ margin: "0 0 16px", color: "#fff", fontWeight: 800, fontStyle: "italic", fontSize: 18 }}>Your Requirements</h2>
+              <h2 style={{ margin: "0 0 16px", color: "#fff", fontWeight: 800, fontStyle: "italic", fontSize: 22 }}>Your Requirements</h2>
               {result.is2ph && <div style={{ marginBottom: 16, padding: "12px 14px", background: "rgba(0,119,170,0.06)", border: `1px solid ${BLUE}`, borderRadius: 6, fontSize: 12, color: BLUE }}>ⓘ 2-phase installation is not a standard configuration. We recommend contacting myenergi support before proceeding.</div>}
 
               {/* Summary chips */}
@@ -831,7 +831,7 @@ export default function App() {
 
               {/* Monitoring options */}
               {(result.hasSolar || result.hasAcBat) && (
-                <div style={{ marginBottom: 16 }}>
+                <div style={{ marginBottom: 16, fontSize: 13 }}>
                   <SecLabel>Monitoring Options</SecLabel>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {result.hasSolar && <Checkbox checked={monitorSolar} onChange={() => setMonitorSolar(m => !m)} label="Monitor solar generation" sub="Required to see self-consumption % and solar output on your myenergi device + app. Solar-aware charging is not impacted."/>}
@@ -852,7 +852,7 @@ export default function App() {
                       </div>
                     ))}
                   </div>
-                  <div style={{ fontSize: 11, color: MUTED }}>The controller receives CT inputs. Other devices run as secondary.</div>
+                  <div style={{ fontSize: 12, color: MUTED }}>The controller receives CT inputs. Other devices run as secondary.</div>
                 </div>
               )}
 
@@ -878,9 +878,9 @@ export default function App() {
 
               {/* Plain-English translation */}
               <div style={{ marginBottom: 20, padding: "14px 16px", background: "rgba(64,255,122,0.06)", border: `1px solid rgba(64,255,122,0.25)`, borderRadius: 8 }}>
-                <div style={{ fontSize: 11, color: G_TXT, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>In Plain English</div>
+                <div style={{ fontSize: 12, color: G_TXT, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>In Plain English</div>
                 {plainEnglish.map((line, i) => (
-                  <p key={i} style={{ margin: "0 0 6px", fontSize: 12, color: "#ccc", lineHeight: 1.55 }}>{line}</p>
+                  <p key={i} style={{ margin: "0 0 6px", fontSize: 13, color: "#ccc", lineHeight: 1.55 }}>{line}</p>
                 ))}
               </div>
 
@@ -900,7 +900,7 @@ export default function App() {
                       {ctConfig.map((row, i) => (
                         <React.Fragment key={i}>
                           <tr>
-                            <td style={{ ...tdr(i), color: "#ccc" }}>{row.component}</td>
+                            <td style={{ ...tdr(i), color: "#ccc", fontSize: 13 }}>{row.component}</td>
                             <td style={{ ...tdr(i), textAlign: "center", color: G_TXT, fontWeight: 700 }}>{row.cts}</td>
                             <td style={{ ...tdr(i), color: BLUE }}>{row.type}</td>
                             <td style={{ ...tdr(i), color: row.routing === "harvi" ? YELLOW : MUTED }}>{row.input}</td>
@@ -912,8 +912,8 @@ export default function App() {
                         </React.Fragment>
                       ))}
                       <tr>
-                        <td style={{ padding: "8px 10px", color: "#fff", fontWeight: 700, borderTop: `2px solid ${BORDER}`, fontSize: 12 }}>Total</td>
-                        <td style={{ padding: "8px 10px", textAlign: "center", color: G_TXT, fontWeight: 700, borderTop: `2px solid ${BORDER}`, fontSize: 12 }}>{result.totalCTs}</td>
+                        <td style={{ padding: "8px 10px", color: "#fff", fontWeight: 700, borderTop: `2px solid ${BORDER}`, fontSize: 13 }}>Total</td>
+                        <td style={{ padding: "8px 10px", textAlign: "center", color: G_TXT, fontWeight: 700, borderTop: `2px solid ${BORDER}`, fontSize: 13 }}>{result.totalCTs}</td>
                         <td colSpan={3} style={{ borderTop: `2px solid ${BORDER}` }}/>
                       </tr>
                     </tbody>
@@ -932,12 +932,12 @@ export default function App() {
                   <tbody>
                     {result.selProds.map((p, i) => (
                       <tr key={i}>
-                        <td style={tdr(i)}><div style={{ display: "flex", alignItems: "center", gap: 10 }}><Icon name={p.name}/><div><div style={{ color: "#ddd", fontSize: 13 }}>{p.friendlyName || p.name}</div><div style={{ color: MUTED, fontSize: 11 }}>{p.tagline || ""}</div></div></div></td>
+                        <td style={tdr(i)}><div style={{ display: "flex", alignItems: "center", gap: 10 }}><Icon name={p.name}/><div><div style={{ color: "#ddd", fontSize: 14 }}>{p.friendlyName || p.name}</div><div style={{ color: MUTED, fontSize: 12 }}>{p.tagline || ""}</div></div></div></td>
                         <td style={{ ...tdr(i), textAlign: "center", color: "#fff", fontWeight: 700 }}>{p.qty}</td>
                       </tr>
                     ))}
                     {harviTotal > 0 && (() => { const i = result.selProds.length; return (
-                      <tr><td style={tdr(i)}><div style={{ display: "flex", alignItems: "center", gap: 10 }}><Icon name="harvi"/><div><div style={{ color: "#ddd", fontSize: 13 }}>harvi</div><div style={{ color: MUTED, fontSize: 11 }}>Wireless CT Transmitter</div></div></div></td><td style={{ ...tdr(i), textAlign: "center", color: YELLOW, fontWeight: 700 }}>{harviTotal}</td></tr>
+                      <tr><td style={tdr(i)}><div style={{ display: "flex", alignItems: "center", gap: 10 }}><Icon name="harvi"/><div><div style={{ color: "#ddd", fontSize: 14 }}>harvi</div><div style={{ color: MUTED, fontSize: 12 }}>Wireless CT Transmitter</div></div></div></td><td style={{ ...tdr(i), textAlign: "center", color: YELLOW, fontWeight: 700 }}>{harviTotal}</td></tr>
                     ); })()}
                     {result.additionalCTs > 0 && (() => { const i = result.selProds.length + (harviTotal > 0 ? 1 : 0); return (
                       <tr><td style={{ ...tdr(i), color: "#333" }}>Additional CT clamps</td><td style={{ ...tdr(i), textAlign: "center", color: WARN, fontWeight: 700 }}>{result.additionalCTs}</td></tr>
@@ -948,7 +948,7 @@ export default function App() {
 
               {/* Wiring Diagram */}
               <div style={{ marginBottom: 24, marginLeft: -48, marginRight: -48 }}>
-                <div style={{ fontSize: 10, color: MUTED, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8, paddingLeft: 48 }}>Wiring Diagram</div>
+                <div style={{ fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8, paddingLeft: 48 }}>Wiring Diagram</div>
                 <div style={{ padding: "0 54px" }}>
                   <Diagram config={diagramConfig} />
                 </div>
@@ -961,10 +961,10 @@ export default function App() {
                   {/* Header */}
                   <div style={{ padding: "14px 16px", borderBottom: `1px solid ${BORDER}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     <div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: "#ddd" }}>myenergi App</div>
-                      <div style={{ fontSize: 11, color: MUTED, marginTop: 2 }}>How your system will appear in the app</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "#ddd" }}>myenergi App</div>
+                      <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>How your system will appear in the app</div>
                     </div>
-                    <div style={{ fontSize: 10, color: MUTED, background: CARD, padding: "3px 8px", borderRadius: 4 }}>Preview</div>
+                    <div style={{ fontSize: 11, color: MUTED, background: CARD, padding: "3px 8px", borderRadius: 4 }}>Preview</div>
                   </div>
                   {/* App screenshot + overlay */}
                   <div style={{ position: "relative", display: "flex", justifyContent: "center", padding: "24px 16px", background: "#1a1a2e", minHeight: 240 }}>
@@ -993,7 +993,7 @@ export default function App() {
                 <div style={{ fontSize: 10, color: MUTED, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>Notes</div>
                 <textarea
                   placeholder="Add notes here…"
-                  style={{ width: "100%", minHeight: 100, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 6, color: "#ddd", padding: "10px 12px", fontSize: 13, fontFamily: "inherit", resize: "vertical", boxSizing: "border-box" }}
+                  style={{ width: "100%", minHeight: 100, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 6, color: "#ddd", padding: "10px 12px", fontSize: 14, fontFamily: "inherit", resize: "vertical", boxSizing: "border-box" }}
                 />
               </div>
 

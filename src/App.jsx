@@ -9,14 +9,14 @@ import eddiPlusImgUrl from "./eddi+.svg";
 import gloImgUrl    from "./GLO.svg";
 
 const G     = "#40ff7a";   // myenergi green (borders)
-const G_TXT = "#40ff7a";   // green text (bright on dark)
-const DARK  = "#111111";   // diagram / page background (dark)
-const YELLOW= "#ff008c";   // harvi / Accent 2
-const WHITE = "#ffffff";   // power lines (white on dark)
+const G_TXT = "#1a6b35";   // dark green text (readable on white diagram bg)
+const DARK  = "#ffffff";   // diagram background — white (inverted from page)
+const YELLOW= "#cc006a";   // harvi / Accent 2 (darkened for white bg legibility)
+const WHITE = "#111111";   // power lines — black on white
 const MUTED = "#888";
-const CT_COL= "#aaa";
-const SIG   = "#666";
-const BOX_BG= "#343434";   // infrastructure box fill
+const CT_COL= "#555";
+const SIG   = "#999";
+const BOX_BG= "#f0f0f0";   // infrastructure box fill — light grey
 const phSp  = 7;
 
 const DEVICE_IMGS = {
@@ -48,7 +48,7 @@ const CONFIGS = {
 
 const CT = ({ x, y, label }) => (
   <g>
-    <rect x={x-5} y={y-8} width={10} height={16} rx={1.5} fill={CT_COL} stroke="#555" strokeWidth={0.8}/>
+    <rect x={x-5} y={y-8} width={10} height={16} rx={1.5} fill={CT_COL} stroke="#333" strokeWidth={0.8}/>
     {label && <text x={x} y={y+22} textAnchor="middle" fill={CT_COL} fontSize={7} fontWeight="700" fontFamily="Overpass,sans-serif">{label}</text>}
   </g>
 );
@@ -66,9 +66,9 @@ const Blk = ({ x, y, w=80, h=36, label, sub, bc=WHITE, lc=WHITE, bg=BOX_BG, labe
 const BatIcon = ({ x, y, w=50, h=38, label="BATTERY" }) => (
   <g>
     <rect x={x} y={y} width={w} height={h} rx={3} fill={BOX_BG} stroke="#666" strokeWidth={1.5}/>
-    <line x1={x} y1={y+h*0.35} x2={x+w} y2={y+h*0.35} stroke="#555" strokeWidth={0.8}/>
-    <line x1={x} y1={y+h*0.68} x2={x+w} y2={y+h*0.68} stroke="#555" strokeWidth={0.8}/>
-    <rect x={x+w*0.32} y={y+h*0.74} width={w*0.36} height={h*0.18} rx={2} fill="none" stroke="#666" strokeWidth={1}/>
+    <line x1={x} y1={y+h*0.35} x2={x+w} y2={y+h*0.35} stroke="#bbb" strokeWidth={0.8}/>
+    <line x1={x} y1={y+h*0.68} x2={x+w} y2={y+h*0.68} stroke="#bbb" strokeWidth={0.8}/>
+    <rect x={x+w*0.32} y={y+h*0.74} width={w*0.36} height={h*0.18} rx={2} fill="none" stroke="#aaa" strokeWidth={1}/>
     <text x={x+w/2} y={y+h+12} textAnchor="middle" fill={WHITE} fontSize={8} fontWeight="700" fontFamily="Overpass,sans-serif">{label}</text>
   </g>
 );
@@ -109,27 +109,27 @@ const ApplianceIcon = ({ x, y, type, label }) => {
       <g>
         <ellipse cx={x+w/2} cy={y+6} rx={10} ry={5} fill={BOX_BG} stroke="#666" strokeWidth={1.2}/>
         <rect x={x+w/2-10} y={y+6} width={20} height={18} fill={BOX_BG} stroke="#666" strokeWidth={1.2}/>
-        <ellipse cx={x+w/2} cy={y+24} rx={10} ry={5} fill="#444" stroke="#666" strokeWidth={1.2}/>
-        <path d={`M${x+w/2-4},${y+13} q2,-4 4,0 q2,4 4,0`} stroke="#666" strokeWidth={1} fill="none"/>
+        <ellipse cx={x+w/2} cy={y+24} rx={10} ry={5} fill="#ddd" stroke="#666" strokeWidth={1.2}/>
+        <path d={`M${x+w/2-4},${y+13} q2,-4 4,0 q2,4 4,0`} stroke="#aaa" strokeWidth={1} fill="none"/>
       </g>
     ),
     "underfloor": (
       <g>
         <rect x={x+2} y={y+4} width={w-4} height={h-8} rx={2} fill={BOX_BG} stroke="#666" strokeWidth={1.2}/>
-        {[0,1,2].map(i => <path key={i} d={`M${x+6},${y+10+i*6} q4,-3 8,0 q4,3 8,0 q4,-3 6,0`} stroke="#666" strokeWidth={1} fill="none"/>)}
+        {[0,1,2].map(i => <path key={i} d={`M${x+6},${y+10+i*6} q4,-3 8,0 q4,3 8,0 q4,-3 6,0`} stroke="#aaa" strokeWidth={1} fill="none"/>)}
       </g>
     ),
     "pool": (
       <g>
         <rect x={x+2} y={y+4} width={w-4} height={h-8} rx={8} fill={BOX_BG} stroke="#666" strokeWidth={1.2}/>
-        <path d={`M${x+8},${y+14} q5,-4 10,0 q5,4 10,0 q5,-4 8,0`} stroke="#666" strokeWidth={1.2} fill="none"/>
-        <path d={`M${x+8},${y+20} q5,-4 10,0 q5,4 10,0 q5,-4 8,0`} stroke="#666" strokeWidth={1.2} fill="none"/>
+        <path d={`M${x+8},${y+14} q5,-4 10,0 q5,4 10,0 q5,-4 8,0`} stroke="#aaa" strokeWidth={1.2} fill="none"/>
+        <path d={`M${x+8},${y+20} q5,-4 10,0 q5,4 10,0 q5,-4 8,0`} stroke="#aaa" strokeWidth={1.2} fill="none"/>
       </g>
     ),
     "radiator": (
       <g>
         <rect x={x+2} y={y+4} width={w-4} height={h-8} rx={2} fill={BOX_BG} stroke="#666" strokeWidth={1.2}/>
-        {[0,1,2,3].map(i => <rect key={i} x={x+6+i*9} y={y+7} width={5} height={h-14} rx={1} fill="#444" stroke="#666" strokeWidth={0.8}/>)}
+        {[0,1,2,3].map(i => <rect key={i} x={x+6+i*9} y={y+7} width={5} height={h-14} rx={1} fill="#ddd" stroke="#aaa" strokeWidth={0.8}/>)}
       </g>
     ),
   };
@@ -504,9 +504,9 @@ export function Diagram({ config }) {
                 )}
                 <line x1={invRightX} y1={cy} x2={pvX} y2={cy} stroke={WHITE} strokeWidth={2.5}/>
                 <g>
-                  <rect x={pvX} y={cy-pvH/2} width={pvW} height={pvH} rx={3} fill="#1a2a1a" stroke="#555" strokeWidth={1.5}/>
+                  <rect x={pvX} y={cy-pvH/2} width={pvW} height={pvH} rx={3} fill="#e8ede8" stroke="#666" strokeWidth={1.5}/>
                   {[0,1,2].map(c=>[0,1].map(r=>(
-                    <rect key={`${c}${r}`} x={pvX+4+c*18} y={cy-pvH/2+5+r*15} width={13} height={11} rx={1} fill="none" stroke="#444" strokeWidth={1}/>
+                    <rect key={`${c}${r}`} x={pvX+4+c*18} y={cy-pvH/2+5+r*15} width={13} height={11} rx={1} fill="none" stroke="#ccc" strokeWidth={1}/>
                   )))}
                   <text x={pvX+pvW/2} y={cy+pvH/2+13} textAnchor="middle" fill={WHITE} fontSize={8} fontWeight="700" fontFamily="Overpass,sans-serif">
                     {multiInv?`PV ARRAY ${i+1}`:"PV ARRAY"}
