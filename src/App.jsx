@@ -299,13 +299,25 @@ export function Diagram({ config }) {
     ? gridLandXs.concat(solarLandXs)
     : (leftHarvi ? gridLandXs : solarLandXs);
 
-  // ── Secondary device positions — stacked vertically, no horizontal stagger ──
+  // ── Device positions — controller centred, secondaries in horizontal row below ──
   const zappiH = devHOf("zappi");
-  const devPositions = devList.reduce((acc, name, i) => {
-    if (i === 0) return [{ name, isCtrl:true, x:ctrlX, cx:ctrlCX, y:ctrlTopY }];
-    const prev = acc[i-1];
-    return [...acc, { name, isCtrl:false, x:ctrlCX-devWOf(name)/2, cx:ctrlCX, y:prev.y + devHOf(prev.name) + devGap }];
-  }, []);
+  const ctrlEntry = { name: devList[0], isCtrl: true, x: ctrlX, cx: ctrlCX, y: ctrlTopY };
+  const secDevList = devList.slice(1);
+  let devPositions;
+  if (secDevList.length === 0) {
+    devPositions = [ctrlEntry];
+  } else {
+    const secRowY = ctrlTopY + devHOf(devList[0]) + devGap + secStep;
+    // Space secondary connection points evenly within the switchboard width
+    // so every vertical line intersects the switchboard bottom axis
+    const secLineStep = Math.floor(boardW / (secDevList.length + 1));
+    const secEntries = secDevList.map((name, i) => {
+      const cx = ctrlCX + Math.round((i - (secDevList.length - 1) / 2) * secLineStep);
+      const w = devWOf(name);
+      return { name, isCtrl: false, x: cx - w / 2, cx, y: secRowY };
+    });
+    devPositions = [ctrlEntry, ...secEntries];
+  }
 
   // ── Helpers ───────────────────────────────────────────────
   const gridCtX = Math.round(meterX+meterW+(boardX-meterX-meterW)*0.75);
@@ -351,8 +363,11 @@ export function Diagram({ config }) {
       <text x={boardCX} y={busY-boardH/2-10} textAnchor="middle" fill={WHITE} fontSize={8} fontWeight="700" fontFamily="Overpass,sans-serif">MAIN SWITCHBOARD</text>
       <image href={mainSbImgUrl} x={boardX} y={busY-boardH/2} width={boardW} height={boardH} preserveAspectRatio="none"/>
 
-      {/* Vertical trunk from switchboard to bottommost device */}
-      <line x1={ctrlCX} y1={busY+boardH/2} x2={ctrlCX} y2={devPositions[devPositions.length-1].y} stroke={WHITE} strokeWidth={3}/>
+      {/* Individual circuit lines — one straight vertical line per device from switchboard */}
+      {devPositions.map((d, i) => (
+        <line key={i} x1={d.cx} y1={busY+boardH/2} x2={d.cx} y2={d.y}
+          stroke={WHITE} strokeWidth={d.isCtrl ? 3 : 2.5}/>
+      ))}
 
       {/* 1ph harvi — left of zappi */}
       {use1phHarvi && leftHarvi && (
@@ -374,30 +389,33 @@ export function Diagram({ config }) {
         );
       })}
 
-      {/* myenergi devices — vertical stack on trunk */}
+      {/* myenergi devices — controller + horizontal row of secondaries */}
       {devPositions.map((d,i)=>(
         <g key={i}>
           {d.name === "zappi" ? (
             <>
               <defs>
-                <clipPath id="zappi-clip">
+                <clipPath id={`zappi-clip-${i}`}>
                   <rect x={d.x-devW/2} y={d.y} width={devW*2} height={zappiH} rx={4}/>
                 </clipPath>
               </defs>
+              <rect x={d.x-devW/2} y={d.y} width={devW*2} height={zappiH} fill={DARK}/>
               <image href={zappiImgUrl} x={d.x-devW/2} y={d.y} width={devW*2} height={zappiH}
-                preserveAspectRatio="xMidYMid meet" clipPath="url(#zappi-clip)"/>
+                preserveAspectRatio="xMidYMid meet" clipPath={`url(#zappi-clip-${i})`}/>
             </>
           ) : (
             <>
+              <rect x={d.cx-devWOf(d.name)/2} y={d.y} width={devWOf(d.name)} height={devHOf(d.name)} fill={DARK}/>
               <image href={DEVICE_IMGS[d.name]} x={d.cx-devWOf(d.name)/2} y={d.y} width={devWOf(d.name)} height={devHOf(d.name)} preserveAspectRatio="xMidYMid meet"/>
             </>
           )}
-          {/* WiFi between adjacent devices: points down (away from master/prev device toward slave) */}
-          {!d.isCtrl && (
-            <WiFi cx={Math.round((devPositions[i-1].cx+d.cx)/2)} cy={Math.round((devPositions[i-1].y+devHOf(devPositions[i-1].name)+d.y)/2)} rotate={180} color={WHITE} size={10}/>
-          )}
         </g>
       ))}
+
+      {/* Single WiFi symbol below controller when secondaries exist */}
+      {secDevList.length > 0 && (
+        <WiFi cx={ctrlCX} cy={ctrlTopY + devHOf(devList[0]) + 14} rotate={180} color={WHITE} size={10}/>
+      )}
 
       {/* Eddi appliances — drawn to the left of each eddi/eddi+ device */}
       {(() => {
