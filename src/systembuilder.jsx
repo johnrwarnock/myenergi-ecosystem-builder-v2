@@ -583,8 +583,11 @@ function AppPreview({ cfg, result, monitorSolar = true, monitorBattery = true })
     }
   }
 
-  // Green percentage — 0% if no solar or solar unmonitored
+  // Final energy balance — ensure grid covers any load not already met by solar
   const totalLoad = r1(houseKw + zappiKwEach * numZappis + eddiKwEach * numEddis);
+  gridKw = Math.max(gridKw, Math.max(0, r1(totalLoad - effectiveSolar)));
+
+  // Green percentage — 0% if no solar or solar unmonitored
   const greenPct = (!hasSolarInverters || !monitorSolar) ? 0
     : gridKw === 0 ? 100
     : totalLoad > 0 ? Math.round(Math.max(0, (totalLoad - gridKw) / totalLoad * 100)) : 0;
@@ -629,7 +632,23 @@ function AppPreview({ cfg, result, monitorSolar = true, monitorBattery = true })
     ? { x: nd.cx, y: nd.cy - 46, anchor: 'middle' }
     : { x: nd.cx, y: nd.cy + 56, anchor: 'middle' };
 
+  const MODE_COLORS = {
+    'ECO':   { bg: '#FFCC00', fg: '#000' },
+    'ECO+':  { bg: '#40ff7a', fg: '#000' },
+    'FAST':  { bg: '#0086FF', fg: '#fff' },
+    'BOOST': { bg: '#0086FF', fg: '#fff' },
+    'STOP':  { bg: '#FF008C', fg: '#fff' },
+  };
+  const MODE_DESC = {
+    'ECO':   "Charges using surplus solar — tops up from the grid when there isn't enough generation. Charging starts as soon as the EV is plugged in.",
+    'ECO+':  "Charges only when surplus solar is sufficient — pauses automatically when generation drops, and resumes when it recovers. Avoids any grid import.",
+    'FAST':  "Charges at full speed using grid power, up to 7.4 kW (1ph) or 22 kW (3ph) — limited only by the EV's onboard charger or any configured device/grid limits.",
+    'BOOST': "Forces maximum power immediately, overriding ECO/ECO+ — zappi charges the EV at full speed and eddi diverts power to the connected appliance at maximum rate. Boosts can be triggered manually or set to a schedule.",
+    'STOP':  "Stops all myenergi devices — surplus solar exports to the grid rather than being used for charging or heating.",
+  };
+
   return (
+    <>
     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
       <svg viewBox="0 0 375 667" style={{ width: 210, display: "block", borderRadius: 12 }}>
         {/* background */}
@@ -720,6 +739,21 @@ function AppPreview({ cfg, result, monitorSolar = true, monitorBattery = true })
                   <rect x={nd.cx + 17.5} y={nd.cy - 26.5} width={9} height={9} rx={1.5} fill="white"/>
                 </g>
               )}
+              {nd.type === 'home' && (
+                <g transform={`rotate(90, ${nd.cx}, ${nd.cy})`} opacity="1">
+                  {/* Colon dots — positioned left in pre-rotation = eyes above smile on screen */}
+                  {/* cx+8 shifts whole smiley 25% down on screen; ±6.25 = 25% wider dot spacing */}
+                  <circle cx={nd.cx} cy={nd.cy - 3.84} r={1.76} fill="white"/>
+                  <circle cx={nd.cx} cy={nd.cy + 3.84} r={1.76} fill="white"/>
+                  {/* ) smile — same pre-rotation y as dot midpoint = horizontally centred on screen */}
+                  <text
+                    x={nd.cx + 14} y={nd.cy}
+                    textAnchor="middle" dominantBaseline="central"
+                    fontSize="13" fontWeight="700"
+                    fill="white" fontFamily="Overpass, sans-serif"
+                  >)</text>
+                </g>
+              )}
               <text x={kp.x} y={kp.y} textAnchor="middle" fontSize="22" fontWeight="700" fill={nd.color}>
                 {fmtKw(nd.kw)}
               </text>
@@ -730,11 +764,11 @@ function AppPreview({ cfg, result, monitorSolar = true, monitorBattery = true })
 
       {/* Mode buttons */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {['ECO', 'ECO+', 'FAST', 'BOOST', 'STOP'].map(m => (
+        {Object.entries(MODE_COLORS).map(([m, { bg, fg }]) => (
           <button key={m} onClick={() => setMode(m)} style={{
-            background: mode === m ? (m === 'STOP' ? '#cc2200' : '#0086FF') : '#232323',
-            color: mode === m ? '#fff' : '#777',
-            border: `1px solid ${mode === m ? (m === 'STOP' ? '#cc2200' : '#0086FF') : '#3a3a3a'}`,
+            background: mode === m ? bg : '#232323',
+            color: mode === m ? fg : '#777',
+            border: `1px solid ${mode === m ? bg : '#3a3a3a'}`,
             borderRadius: 6,
             padding: '8px 14px',
             fontSize: 11,
@@ -749,6 +783,14 @@ function AppPreview({ cfg, result, monitorSolar = true, monitorBattery = true })
         ))}
       </div>
     </div>
+
+    {/* Mode description */}
+    {MODE_DESC[mode] && (
+      <p style={{ margin: '8px 0 0', fontSize: 12, color: '#aaa', lineHeight: 1.5, maxWidth: 520 }}>
+        {MODE_DESC[mode]}
+      </p>
+    )}
+    </>
   );
 }
 
@@ -817,7 +859,7 @@ export default function App() {
 
   const result = useMemo(() => calcResults(cfg, monitorSolar, monitorBattery, controllerProductId), [cfg, monitorSolar, monitorBattery, controllerProductId]);
   const ctrlProdData = PRODUCTS.find(p => p.id === controllerProductId);
-  const ctrlForcesWireless = cfg.phase === "1ph" && !!(ctrlProdData && ctrlProdData.ctsSupported < 3);
+  const ctrlForcesWireless = cfg.phase === "1ph" && !!(ctrlProdData && result && ctrlProdData.ctsSupported < result.totalCTs);
   const effectiveWireless = wireless || ctrlForcesWireless;
 
   const STEPS = ["Your Property", "myenergi Devices", "Your Requirements"];
