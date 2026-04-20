@@ -769,7 +769,7 @@ function AppPreview({ cfg, result, monitorSolar = true, monitorBattery = true })
             background: mode === m ? bg : '#232323',
             color: mode === m ? fg : '#777',
             border: `1px solid ${mode === m ? bg : '#3a3a3a'}`,
-            borderRadius: 6,
+            borderRadius: 999,
             padding: '8px 14px',
             fontSize: 11,
             fontWeight: 700,
