@@ -103,7 +103,7 @@ const APPLIANCE_OPTIONS = [
 ];
 
 // ── Translate SystemBuilder state → Diagram config ───────────────────────────
-function buildDiagramConfig(cfg, wireless, monitorSolar, monitorBattery, controllerProductId) {
+function buildDiagramConfig(cfg, wireless, monitorSolar, monitorBattery, controllerProductId, zappiSinglePhase = false) {
   const { phase, inverters = [], batteries = [], selections = {}, eddiAppliances = {} } = cfg;
 
   const sp = phase || "1ph";
@@ -160,7 +160,7 @@ function buildDiagramConfig(cfg, wireless, monitorSolar, monitorBattery, control
   if (pr.length === 0) pr.push("zappi");
 
   const ctrlCaps = CTRL_CTS_MAP[pr[0]] || 3;
-  const wlFinal = wl || ctrlCaps < 3;
+  const wlFinal = wl || ctrlCaps < 3 || (zappiSinglePhase && phase === "3ph");
 
   // Flatten eddiAppliances into per-device array: [["hot-water","underfloor"],["pool",""]]
   // one entry per eddi or eddi+ in the pr list, in order
@@ -802,6 +802,7 @@ export default function App() {
     eddiAppliances: {},   // { "4": [{app1:"",app2:""}, ...], "5": [...] }
   });
   const [wireless, setWireless] = useState(false);
+  const [zappiSinglePhase, setZappiSinglePhase] = useState(false);
   const [monitorSolar, setMonitorSolar] = useState(true);
   const [monitorBattery, setMonitorBattery] = useState(true);
   const [controllerProductId, setControllerProductId] = useState(2);
@@ -870,7 +871,7 @@ export default function App() {
     if (!result) return [];
     const { validComps, ctsSupported } = result;
     const is3ph = cfg.phase === "3ph", is2ph = cfg.phase === "2ph", is1ph = cfg.phase === "1ph";
-    const needsGridHarvi = is2ph || (is3ph && ctsSupported < 3) || (effectiveWireless && is1ph);
+    const needsGridHarvi = is2ph || (is3ph && ctsSupported < 3) || (effectiveWireless && is1ph) || (is3ph && zappiSinglePhase);
     const rows = [];
     const acBatComps = validComps.filter(c => c.isBattery && !c.label.startsWith("DC"));
     const otherComps = validComps.filter(c => !c.isBattery || c.label.startsWith("DC"));
@@ -900,7 +901,7 @@ export default function App() {
       rows.push({ component: label, type: "AC Battery", input, routing, note: acBatComps.length > 1 ? `${acBatComps.length} AC batteries share one harvi — connect each CT to available inputs on the same harvi unit.` : null, cts: totalAcCTs });
     }
     return rows;
-  }, [result, cfg, effectiveWireless, monitorSolar, monitorBattery]);
+  }, [result, cfg, effectiveWireless, zappiSinglePhase, monitorSolar, monitorBattery]);
 
   const incr = id => {
     const tot = Object.values(cfg.selections).reduce((s,q)=>s+q,0);
@@ -1115,8 +1116,9 @@ export default function App() {
 
         {/* ── STEP 2 — Your Requirements ─────────────────────────────────────── */}
         {step === 2 && result && (() => {
-          const harviTotal = result.harvisNeeded + (effectiveWireless && cfg.phase === "1ph" ? 1 : 0);
-          const diagramConfig = buildDiagramConfig(cfg, effectiveWireless, monitorSolar, monitorBattery, controllerProductId);
+          const harviTotal = result.harvisNeeded + (effectiveWireless && cfg.phase === "1ph" ? 1 : 0) + (zappiSinglePhase && cfg.phase === "3ph" ? 1 : 0);
+          const showZappiSinglePhase = cfg.phase === "3ph" && result.selProds.some(p => p.id === 2 && p.qty > 0);
+          const diagramConfig = buildDiagramConfig(cfg, effectiveWireless, monitorSolar, monitorBattery, controllerProductId, zappiSinglePhase);
           const plainEnglish = generatePlainEnglish(result, ctConfig, effectiveWireless, cfg, harviTotal);
           return (
             <div id="results-page">
@@ -1186,6 +1188,24 @@ export default function App() {
               {cfg.phase === "1ph" && ctrlForcesWireless && (
                 <div style={{ marginBottom: 20, padding: "10px 14px", background: "rgba(160,104,0,0.06)", border: `1px solid rgba(160,104,0,0.3)`, borderRadius: 6, fontSize: 12, color: YELLOW }}>
                   ⚠ Wireless CT connection (harvi) is required — the selected controller device only supports 2 CT inputs.
+                </div>
+              )}
+
+              {/* zappi single-phase on 3-phase supply */}
+              {showZappiSinglePhase && (
+                <div style={{ marginBottom: 20 }}>
+                  <Checkbox
+                    checked={zappiSinglePhase}
+                    onChange={() => setZappiSinglePhase(z => !z)}
+                    label="zappi wired single phase on a 3-phase supply"
+                    sub="Tick if the zappi will be connected to one phase only, despite the property having a 3-phase supply"
+                    color={YELLOW}
+                  />
+                  {zappiSinglePhase && (
+                    <div style={{ marginTop: 8, padding: "10px 14px", background: "rgba(160,104,0,0.06)", border: `1px solid rgba(160,104,0,0.3)`, borderRadius: 6, fontSize: 12, color: YELLOW, lineHeight: 1.55 }}>
+                      ⚠ When a 3-phase capable device is wired to a single phase, it can only see power on that one phase. A harvi is required to monitor all three phases wirelessly and net the total import/export across all phases — ensuring accurate solar-aware charging and correct energy readings in the app.
+                    </div>
+                  )}
                 </div>
               )}
 
