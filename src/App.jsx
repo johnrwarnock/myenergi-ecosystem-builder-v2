@@ -45,6 +45,23 @@ const CONFIGS = {
   "1ph · libbi AC":  { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}], ab:[{mb:false}], wl:false, pr:["zappi","libbi"] },
   "1ph · libbi DC":  { sp:"1ph", inv:[{ph:"1ph",dc:true, db:true, ms:true}], ab:[],           wl:false, pr:["zappi","libbi"] },
   "1ph · main switch split": { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}], ab:[{mb:true}], wl:false, pr:["zappi"], mainSwitchSplit:true },
+  "GLO solo":                { sp:"1ph", inv:[], ab:[], wl:false, pr:["GLO"] },
+  "GLO + solar (hardwired)": { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}], ab:[], wl:false, pr:["GLO"] },
+  "GLO + battery (at cap)":  { sp:"1ph", inv:[], ab:[{mb:true}], wl:false, pr:["GLO"] },
+  "GLO + solar + battery (forced wireless)": { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}], ab:[{mb:true}], wl:true, pr:["GLO"] },
+  "3ph GLO":                 { sp:"3ph", inv:[{ph:"3ph",dc:false,db:false,ms:true}], ab:[], wl:false, pr:["GLO"] },
+  "eddi + appliances":       { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}], ab:[], wl:false, pr:["eddi"], appliancesList:[{device:"eddi",app1:"hot-water",app2:"underfloor"}] },
+  "eddi+ 3ph + battery":     { sp:"3ph", inv:[], ab:[{mb:true}], wl:false, pr:["eddi+"] },
+  "3ph · main switch split (DC hybrid)": { sp:"3ph", inv:[{ph:"3ph",dc:true,db:true,ms:true}], ab:[], wl:false, pr:["zappi"], mainSwitchSplit:true },
+  "3ph · main switch split + AC battery": { sp:"3ph", inv:[{ph:"3ph",dc:false,db:false,ms:true}], ab:[{mb:true}], wl:false, pr:["zappi"], mainSwitchSplit:true },
+  "1ph · main switch split, battery only": { sp:"1ph", inv:[], ab:[{mb:true}], wl:false, pr:["zappi"], mainSwitchSplit:true },
+  "1ph · main switch split + multi device": { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}], ab:[{mb:true}], wl:false, pr:["zappi","eddi","libbi"], mainSwitchSplit:true },
+  "2ph · main switch split + battery": { sp:"2ph", inv:[{ph:"2ph",dc:false,db:false,ms:true}], ab:[{mb:true}], wl:false, pr:["zappi"], mainSwitchSplit:true },
+  "multi-dev ×5 (max)":      { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}], ab:[], wl:false, pr:["zappi","eddi","eddi+","GLO","libbi"] },
+  "GLO as secondary":        { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}], ab:[], wl:false, pr:["zappi","GLO"] },
+  "2× zappi":                { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}], ab:[], wl:false, pr:["zappi","zappi"] },
+  "3× zappi + eddi":         { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}], ab:[], wl:false, pr:["zappi","zappi","zappi","eddi"] },
+  "2× GLO":                  { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}], ab:[], wl:false, pr:["zappi","GLO","GLO"] },
 };
 
 const CT = ({ x, y, label }) => (
@@ -304,20 +321,38 @@ export function Diagram({ config }) {
 
   // ── Device positions — controller centred, secondaries in horizontal row below ──
   const zappiH = devHOf("zappi");
-  const ctrlEntry = { name: devList[0], isCtrl: true, x: ctrlX, cx: ctrlCX, y: ctrlTopY };
+  const ctrlEntry = { name: devList[0], isCtrl: true, x: ctrlX, cx: ctrlCX, y: ctrlTopY, boardExitCx: ctrlCX };
   const secDevList = devList.slice(1);
   let devPositions;
   if (secDevList.length === 0) {
     devPositions = [ctrlEntry];
   } else {
     const secRowY = ctrlTopY + devHOf(devList[0]) + devGap + secStep;
-    // Space secondary connection points evenly within the switchboard width
-    // so every vertical line intersects the switchboard bottom axis
+    // Board-exit points (where each circuit visually leaves the switchboard) stay
+    // evenly spaced within the board width. Actual device centres are spaced by
+    // each device's real rendered width plus a fixed margin, so wide icons (libbi,
+    // GLO) never overlap a neighbour — a short jog (drawn below) connects the two.
+    const SEC_MARGIN = 20;
+    const STAGGER_Y = 44;
     const secLineStep = Math.floor(boardW / (secDevList.length + 1));
+    const secWidths = secDevList.map(devWOf);
+    const totalSecW = secWidths.reduce((s, w) => s + w, 0) + SEC_MARGIN * (secDevList.length - 1);
+    let cursorX = ctrlCX - totalSecW / 2;
     const secEntries = secDevList.map((name, i) => {
-      const cx = ctrlCX + Math.round((i - (secDevList.length - 1) / 2) * secLineStep);
-      const w = devWOf(name);
-      return { name, isCtrl: false, x: cx - w / 2, cx, y: secRowY };
+      const boardExitCx = ctrlCX + Math.round((i - (secDevList.length - 1) / 2) * secLineStep);
+      const w = secWidths[i];
+      const cx = cursorX + w / 2;
+      cursorX += w + SEC_MARGIN;
+      // The zappi image is rendered specially (x - devW/2, width devW*2 — see the
+      // device-rendering block below), so its stored x must match that convention
+      // (same as ctrlX above) rather than the generic cx - fullWidth/2 used by
+      // every other device, or its icon renders off-centre from its own wire.
+      const x = name === "zappi" ? cx - devW / 2 : cx - w / 2;
+      // Stagger alternating secondaries onto a lower row so repeated devices
+      // (e.g. two zappis, two GLOs) each keep a clearly separate line back to
+      // the board rather than reading as one wall of parallel wires.
+      const y = secRowY + (i % 2 === 1 ? STAGGER_Y : 0);
+      return { name, isCtrl: false, x, cx, y, boardExitCx };
     });
     devPositions = [ctrlEntry, ...secEntries];
   }
@@ -331,7 +366,7 @@ export function Diagram({ config }) {
   const busSegSpan  = boardX - busSegStart;
   const gridCtX = Math.round(busSegStart + busSegSpan * (showMainSwitch ? 0.3 : 0.75));
   const mainSwitchX = showMainSwitch ? Math.round(busSegStart + busSegSpan * 0.65) : 0;
-  const topY = busY - 60;
+  const topY = busY - 80;
   const propertyCtX = showMainSwitch ? Math.round(mainSwitchX + (boardCX - mainSwitchX) * 0.55) : 0;
   const propDashY = topY - 18;
   const bypassY = busY + boardH/2 + 24;
@@ -356,8 +391,16 @@ export function Diagram({ config }) {
   const bottomAll = Math.max(...devPositions.map(d=>d.y+devHOf(d.name)));
   const VH = bottomAll+60; // extra padding so secondary devices are never clipped
 
+  // Horizontal extent can exceed the base viewBox once several wide secondaries
+  // (libbi, GLO) are laid out with real, non-overlapping spacing — grow the
+  // viewBox to fit rather than clip, mirroring how VH already grows for height.
+  const devLeftEdge  = d => d.name === "zappi" ? (d.x - devW/2) : (d.cx - devWOf(d.name)/2);
+  const devRightEdge = d => d.name === "zappi" ? (d.x - devW/2 + devW*2) : (d.cx + devWOf(d.name)/2);
+  const VXeff = Math.min(VX, ...devPositions.map(devLeftEdge)) - 10;
+  const VWeff = Math.max(VX+VW, ...devPositions.map(devRightEdge)) + 10 - VXeff;
+
   return (
-    <svg width="100%" viewBox={`${VX} 0 ${VW} ${VH}`} style={{background:DARK,borderRadius:8,display:"block"}}>
+    <svg width="100%" viewBox={`${VXeff} 0 ${VWeff} ${VH}`} style={{background:DARK,borderRadius:8,display:"block"}}>
 
       {/* GRID */}
       <image href={gridImgUrl} x={pylonX-50} y={busY-90} width={100} height={90} preserveAspectRatio="xMidYMid meet"/>
@@ -377,11 +420,23 @@ export function Diagram({ config }) {
       <text x={boardCX} y={busY-boardH/2-10} textAnchor="middle" fill={WHITE} fontSize={8} fontWeight="700" fontFamily="Overpass,sans-serif">MAIN SWITCHBOARD</text>
       <image href={mainSbImgUrl} x={boardX} y={busY-boardH/2} width={boardW} height={boardH} preserveAspectRatio="none"/>
 
-      {/* Individual circuit lines — one straight vertical line per device */}
-      {devPositions.map((d, i) => (
-        <line key={i} x1={d.cx} y1={showMainSwitch ? bypassY : busY+boardH/2} x2={d.cx} y2={d.y}
-          stroke={WHITE} strokeWidth={d.isCtrl ? 3 : 2.5}/>
-      ))}
+      {/* Individual circuit lines — straight for the controller (and for any device whose
+          real position matches its board-exit point); a short jog for secondaries whose
+          width-aware spacing has shifted them away from their evenly-spaced exit point. */}
+      {devPositions.map((d, i) => {
+        const topY = showMainSwitch ? bypassY : busY + boardH/2;
+        if (showMainSwitch || d.cx === d.boardExitCx) {
+          return <line key={i} x1={d.cx} y1={topY} x2={d.cx} y2={d.y} stroke={WHITE} strokeWidth={d.isCtrl ? 3 : 2.5}/>;
+        }
+        const jogY = d.y - 18;
+        return (
+          <g key={i}>
+            <line x1={d.boardExitCx} y1={topY} x2={d.boardExitCx} y2={jogY} stroke={WHITE} strokeWidth={2.5}/>
+            <line x1={d.boardExitCx} y1={jogY} x2={d.cx} y2={jogY} stroke={WHITE} strokeWidth={2.5}/>
+            <line x1={d.cx} y1={jogY} x2={d.cx} y2={d.y} stroke={WHITE} strokeWidth={2.5}/>
+          </g>
+        );
+      })}
 
       {/* Main switch — central fork: switchboard fed from the top, myenergi device fed from the bottom */}
       {showMainSwitch && (() => {
@@ -397,7 +452,7 @@ export function Diagram({ config }) {
             <line x1={mainSwitchX} y1={busY-7} x2={mainSwitchX} y2={topY} stroke={WHITE} strokeWidth={2.5}/>
             <line x1={mainSwitchX} y1={topY} x2={boardCX} y2={topY} stroke={WHITE} strokeWidth={2.5}/>
             <line x1={boardCX} y1={topY} x2={boardCX} y2={busY-boardH/2} stroke={WHITE} strokeWidth={2.5}/>
-            <text x={(mainSwitchX+boardCX)/2} y={topY-8} textAnchor="middle" fill={WHITE} fontSize={7.5} fontWeight="700" fontFamily="Overpass,sans-serif">MAIN SWITCH</text>
+            <text x={mainSwitchX} y={busY-12} textAnchor="middle" fill={WHITE} fontSize={7.5} fontWeight="700" fontFamily="Overpass,sans-serif">MAIN SWITCH</text>
 
             {/* Bottom branch → myenergi device */}
             <line x1={mainSwitchX} y1={busY+7} x2={mainSwitchX} y2={bypassY} stroke={WHITE} strokeWidth={2.5}/>

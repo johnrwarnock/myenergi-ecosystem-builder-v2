@@ -107,7 +107,6 @@ function buildDiagramConfig(cfg, wireless, monitorSolar, monitorBattery, control
   const { phase, inverters = [], batteries = [], selections = {}, eddiAppliances = {} } = cfg;
 
   const sp = phase || "1ph";
-  const CTRL_CTS_MAP = { "zappi":3, "eddi+":3, "eddi":2, "GLO":2, "libbi":3 };
   const wl = wireless || phase === "2ph";
 
   const inv = inverters
@@ -159,8 +158,12 @@ function buildDiagramConfig(cfg, wireless, monitorSolar, monitorBattery, control
   });
   if (pr.length === 0) pr.push("zappi");
 
-  const ctrlCaps = CTRL_CTS_MAP[pr[0]] || 3;
-  const wlFinal = wl || ctrlCaps < 3 || (zappiSinglePhase && phase === "3ph");
+  // Only force wireless when actually needed: the caller already folds in the
+  // 1ph over-capacity case via effectiveWireless, and the diagram itself
+  // separately re-derives the 3ph limited-controller case (gridToHarvi in
+  // App.jsx) — this must not blanket-force wireless just because a controller
+  // (e.g. GLO, eddi) natively supports fewer than 3 CTs.
+  const wlFinal = wl || (zappiSinglePhase && phase === "3ph");
 
   // Flatten eddiAppliances into per-device array: [["hot-water","underfloor"],["pool",""]]
   // one entry per eddi or eddi+ in the pr list, in order
@@ -808,6 +811,14 @@ export default function App() {
   const [controllerProductId, setControllerProductId] = useState(2);
   const [mainSwitchSplit, setMainSwitchSplit] = useState(false);
   const [notes, setNotes] = useState("");
+
+  // GLO defaults to the simple case — no solar monitoring, hard-wired CTs —
+  // rather than inheriting the global monitorSolar/wireless defaults meant
+  // for zappi. Only resets on the transition to GLO, so a manual override
+  // afterward sticks until the controller changes again.
+  useEffect(() => {
+    if (controllerProductId === 3) { setMonitorSolar(false); setWireless(false); }
+  }, [controllerProductId]);
 
   const setPhase = v => setCfg(c => ({ ...c, phase: v }));
   const setInverters = fn => setCfg(c => ({ ...c, inverters: fn(c.inverters) }));
