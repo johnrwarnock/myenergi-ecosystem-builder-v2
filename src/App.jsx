@@ -7,6 +7,7 @@ import libbiImgUrl  from "./libbi.svg";
 import eddiImgUrl   from "./eddi.svg";
 import eddiPlusImgUrl from "./eddi+.svg";
 import gloImgUrl    from "./GLO.svg";
+import { computeSecondaryRow, computeViewBox, computeMainSwitchFork } from "./diagram/layout/index.js";
 
 const G     = "#40ff7a";   // myenergi green (borders)
 const G_TXT = "#1a6b35";   // dark green text (readable on white diagram bg)
@@ -158,75 +159,6 @@ const ApplianceIcon = ({ x, y, type, label }) => {
     </g>
   );
 };
-
-// ── Layout primitives ─────────────────────────────────────────────────────
-// Pure functions, no JSX — each takes plain numbers/arrays and returns plain
-// numbers/objects. Extracted verbatim from Diagram() with no behavior change
-// (see the commit that introduced this split for the before/after diff).
-
-/**
- * Board-exit points (where each circuit visually leaves the switchboard) stay
- * evenly spaced within the board width. Actual device centres are spaced by
- * each device's real rendered width plus a fixed margin, so wide icons
- * (libbi, GLO) never overlap a neighbour — a short jog (drawn by the caller)
- * connects the two. Alternating secondaries stagger onto a lower row so
- * repeated devices (e.g. two zappis) each keep a clearly separate line.
- */
-function computeSecondaryRow({ ctrlCX, boardW, devW, secRowY, secDevList, devWOf }) {
-  const SEC_MARGIN = 20;
-  const STAGGER_Y = 44;
-  const secLineStep = Math.floor(boardW / (secDevList.length + 1));
-  const secWidths = secDevList.map(devWOf);
-  const totalSecW = secWidths.reduce((s, w) => s + w, 0) + SEC_MARGIN * (secDevList.length - 1);
-  let cursorX = ctrlCX - totalSecW / 2;
-  return secDevList.map((name, i) => {
-    const boardExitCx = ctrlCX + Math.round((i - (secDevList.length - 1) / 2) * secLineStep);
-    const w = secWidths[i];
-    const cx = cursorX + w / 2;
-    cursorX += w + SEC_MARGIN;
-    // The zappi image is rendered specially (x - devW/2, width devW*2 — see the
-    // device-rendering block in Diagram()), so its stored x must match that
-    // convention rather than the generic cx - fullWidth/2 used by every other
-    // device, or its icon renders off-centre from its own wire.
-    const x = name === "zappi" ? cx - devW / 2 : cx - w / 2;
-    const y = secRowY + (i % 2 === 1 ? STAGGER_Y : 0);
-    return { name, isCtrl: false, x, cx, y, boardExitCx };
-  });
-}
-
-/**
- * Horizontal extent can exceed the base viewBox once several wide secondaries
- * are laid out with real, non-overlapping spacing — grow the viewBox to fit
- * rather than clip, the same way VH already grows to fit content height.
- */
-function computeViewBox({ devPositions, devW, devWOf, VX, VW, VH }) {
-  const devLeftEdge  = d => d.name === "zappi" ? (d.x - devW / 2) : (d.cx - devWOf(d.name) / 2);
-  const devRightEdge = d => d.name === "zappi" ? (d.x - devW / 2 + devW * 2) : (d.cx + devWOf(d.name) / 2);
-  const VXeff = Math.min(VX, ...devPositions.map(devLeftEdge)) - 10;
-  const VWeff = Math.max(VX + VW, ...devPositions.map(devRightEdge)) + 10 - VXeff;
-  return { VXeff, VWeff, VH };
-}
-
-/**
- * When split at the main switch: grid CT stays upstream (sees total site
- * flow), then the main switch is the central fork — switchboard fed from its
- * top, myenergi device fed from its bottom. Property CT sits on the
- * switchboard branch, above the board, and reports back to the
- * inverter/battery. When not split, grid CT sits at its default position and
- * the fork-specific coordinates are unused (still computed for simplicity —
- * the caller only renders them when showMainSwitch is true).
- */
-function computeMainSwitchFork({ meterX, meterW, boardX, boardCX, busY, boardH, showMainSwitch }) {
-  const busSegStart = meterX + meterW;
-  const busSegSpan = boardX - busSegStart;
-  const gridCtX = Math.round(busSegStart + busSegSpan * (showMainSwitch ? 0.3 : 0.75));
-  const mainSwitchX = showMainSwitch ? Math.round(busSegStart + busSegSpan * 0.65) : 0;
-  const topY = busY - 80;
-  const propertyCtX = showMainSwitch ? Math.round(mainSwitchX + (boardCX - mainSwitchX) * 0.55) : 0;
-  const propDashY = topY - 18;
-  const bypassY = busY + boardH / 2 + 24;
-  return { gridCtX, mainSwitchX, topY, propertyCtX, propDashY, bypassY };
-}
 
 export function Diagram({ config }) {
   const { sp, inv, ab, wl, pr, appliancesList = [], mainSwitchSplit = false } = config;
