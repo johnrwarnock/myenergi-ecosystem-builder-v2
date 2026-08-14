@@ -1,7 +1,7 @@
 import { useState } from "react";
 import mainSbImgUrl from "./main switchboard.svg";
 import gridImgUrl   from "./grid.svg";
-import { computeSecondaryRow, computeViewBox, computeMainSwitchFork } from "./diagram/layout/index.js";
+import { computeSecondaryRow, computeViewBox, computeMainSwitchFork, computeSatelliteAttachment } from "./diagram/layout/index.js";
 import { DEVICE_REGISTRY } from "./diagram/deviceRegistry.js";
 
 const G     = "#40ff7a";   // myenergi green (borders)
@@ -500,25 +500,32 @@ export function Diagram({ config }) {
       })()}
 
       {/* AC Battery — rendered independently of solar so it appears even with no inverter */}
-      {hasACBat && (
-        <>
-          <BatIcon x={acBatCX-acBatW/2} y={acBatTopY} w={acBatW} h={acBatH} label={trunc(ab[0]?.label, 11) || "BATTERY"}/>
-          {/* Battery → horizontal to boardCX → down to switchboard top */}
-          <line x1={acBatCX-acBatW/2} y1={acBatLineY} x2={boardCX} y2={acBatLineY} stroke={WHITE} strokeWidth={2.5}/>
-          <line x1={boardCX} y1={acBatLineY} x2={boardCX} y2={busY-boardH/2} stroke={WHITE} strokeWidth={2.5}/>
-          {ab[0]?.mb && (() => {
-            const acBatHarvi = rightHarvis.find(h => h.isAcBat);
-            const destX = use1phHarvi ? leftHarvi?.cx : acBatHarvi ? acBatHarvi.cx : solarLandXs[solarLandXs.length-1];
-            const destY = use1phHarvi ? leftHarvi?.topY : acBatHarvi ? acBatHarvi.topY : ctrlTopY;
-            return (
+      {hasACBat && (() => {
+        const box = { x: acBatCX-acBatW/2, y: acBatTopY, w: acBatW, h: acBatH };
+        const ct = ab[0]?.mb ? (() => {
+          const acBatHarvi = rightHarvis.find(h => h.isAcBat);
+          const destX = use1phHarvi ? leftHarvi?.cx : acBatHarvi ? acBatHarvi.cx : solarLandXs[solarLandXs.length-1];
+          const destY = use1phHarvi ? leftHarvi?.topY : acBatHarvi ? acBatHarvi.topY : ctrlTopY;
+          return { x: acBatCtX, y: acBatLineY, label: "Bat CT", dest: { x: destX, y: destY } };
+        })() : null;
+        const { wireSegments, ct: ctGeo } = computeSatelliteAttachment({
+          box, attachStyle: 'side', parentAnchor: { x: boardCX, y: busY-boardH/2 }, ct,
+        });
+        return (
+          <>
+            <BatIcon x={box.x} y={box.y} w={box.w} h={box.h} label={trunc(ab[0]?.label, 11) || "BATTERY"}/>
+            {wireSegments.map((seg, i) => (
+              <line key={i} x1={seg.x1} y1={seg.y1} x2={seg.x2} y2={seg.y2} stroke={WHITE} strokeWidth={2.5}/>
+            ))}
+            {ctGeo && (
               <>
-                <CT x={acBatCtX} y={acBatLineY} label="Bat CT"/>
-                <Curve x1={acBatCtX+5} y1={acBatLineY+8} x2={destX} y2={destY} dashed={true} sw={1.3}/>
+                <CT x={ctGeo.x} y={ctGeo.y} label={ctGeo.label}/>
+                <Curve x1={ctGeo.x+5} y1={ctGeo.y+8} x2={ctGeo.destX} y2={ctGeo.destY} dashed={true} sw={1.3}/>
               </>
-            );
-          })()}
-        </>
-      )}
+            )}
+          </>
+        );
+      })()}
 
       {/* Solar branch */}
       {hasSolar && (
@@ -556,12 +563,20 @@ export function Diagram({ config }) {
                       const batSub = v.dc ? (trunc(v.batLabel, 17) || "+ BATTERY") : undefined;
                       return <Blk x={invX} y={cy-invH/2} w={invW} h={invH} label={invLabel} labelFs={invLabelFs} sub={batSub} bc="#777" lc={WHITE}/>;
                     })()}
-                    {v.dc&&v.db && (
-                      <>
-                        <line x1={invCX} y1={cy+invH/2} x2={invCX} y2={cy+invH/2+22} stroke={WHITE} strokeWidth={2.5}/>
-                        <BatIcon x={invCX-dcBatW/2} y={cy+invH/2+22} w={dcBatW} h={dcBatH} label={trunc(v.batLabel, 11) || "BATTERY"}/>
-                      </>
-                    )}
+                    {v.dc&&v.db && (() => {
+                      const box = { x: invCX-dcBatW/2, y: cy+invH/2+22, w: dcBatW, h: dcBatH };
+                      const { wireSegments } = computeSatelliteAttachment({
+                        box, attachStyle: 'below', parentAnchor: { x: invCX, y: cy+invH/2 }, ct: null,
+                      });
+                      return (
+                        <>
+                          {wireSegments.map((seg, i) => (
+                            <line key={i} x1={seg.x1} y1={seg.y1} x2={seg.x2} y2={seg.y2} stroke={WHITE} strokeWidth={2.5}/>
+                          ))}
+                          <BatIcon x={box.x} y={box.y} w={box.w} h={box.h} label={trunc(v.batLabel, 11) || "BATTERY"}/>
+                        </>
+                      );
+                    })()}
                   </>
                 )}
                 <line x1={invRightX} y1={cy} x2={pvX} y2={cy} stroke={WHITE} strokeWidth={2.5}/>
