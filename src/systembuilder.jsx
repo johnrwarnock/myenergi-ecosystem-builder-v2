@@ -179,7 +179,13 @@ export function buildDiagramConfig(cfg, wireless, monitorSolar, monitorBattery, 
     }
   });
 
-  return { sp, inv, ab, wl: wlFinal, pr, appliancesList, mainSwitchSplit };
+  // Single source of truth for CT capacity: PRODUCTS.ctsSupported, not a
+  // second copy hardcoded in the diagram layer (App.jsx previously kept its
+  // own name-keyed CTRL_CTS map, which could silently drift from this).
+  const ctrlProduct = PRODUCTS.find(p => p.friendlyName === pr[0]);
+  const ctrlCtsSupported = ctrlProduct?.ctsSupported ?? 3;
+
+  return { sp, inv, ab, wl: wlFinal, pr, appliancesList, mainSwitchSplit, ctrlCtsSupported };
 }
 
 const ICON_URLS = {

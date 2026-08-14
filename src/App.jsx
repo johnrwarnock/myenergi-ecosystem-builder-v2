@@ -1,13 +1,8 @@
 import { useState } from "react";
-import zappiImgUrl  from "./zappi.svg";
 import mainSbImgUrl from "./main switchboard.svg";
 import gridImgUrl   from "./grid.svg";
-import harviImgUrl  from "./harvi.svg";
-import libbiImgUrl  from "./libbi.svg";
-import eddiImgUrl   from "./eddi.svg";
-import eddiPlusImgUrl from "./eddi+.svg";
-import gloImgUrl    from "./GLO.svg";
 import { computeSecondaryRow, computeViewBox, computeMainSwitchFork } from "./diagram/layout/index.js";
+import { DEVICE_REGISTRY } from "./diagram/deviceRegistry.js";
 
 const G     = "#40ff7a";   // myenergi green (borders)
 const G_TXT = "#1a6b35";   // dark green text (readable on white diagram bg)
@@ -19,16 +14,6 @@ const CT_COL= "#555";
 const SIG   = "#999";
 const BOX_BG= "#f0f0f0";   // infrastructure box fill — light grey
 const phSp  = 7;
-
-const DEVICE_IMGS = {
-  harvi: harviImgUrl,
-  libbi: libbiImgUrl,
-  eddi:  eddiImgUrl,
-  "eddi+": eddiPlusImgUrl,
-  GLO:   gloImgUrl,
-};
-// Scale multipliers relative to base devW/devH
-const DEVICE_SCALES = { zappi:2, eddi:1.5, "eddi+":1.5, libbi:2.25, GLO:2 };
 
 const CONFIGS = {
   "1ph · solar":        { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}],  ab:[],          wl:false, pr:["zappi"] },
@@ -50,7 +35,7 @@ const CONFIGS = {
   "GLO + solar (hardwired)": { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}], ab:[], wl:false, pr:["GLO"] },
   "GLO + battery (at cap)":  { sp:"1ph", inv:[], ab:[{mb:true}], wl:false, pr:["GLO"] },
   "GLO + solar + battery (forced wireless)": { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}], ab:[{mb:true}], wl:true, pr:["GLO"] },
-  "3ph GLO":                 { sp:"3ph", inv:[{ph:"3ph",dc:false,db:false,ms:true}], ab:[], wl:false, pr:["GLO"] },
+  "3ph GLO":                 { sp:"3ph", inv:[{ph:"3ph",dc:false,db:false,ms:true}], ab:[], wl:false, pr:["GLO"], ctrlCtsSupported:2 },
   "eddi + appliances":       { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}], ab:[], wl:false, pr:["eddi"], appliancesList:[{device:"eddi",app1:"hot-water",app2:"underfloor"}] },
   "eddi+ 3ph + battery":     { sp:"3ph", inv:[], ab:[{mb:true}], wl:false, pr:["eddi+"] },
   "3ph · main switch split (DC hybrid)": { sp:"3ph", inv:[{ph:"3ph",dc:true,db:true,ms:true}], ab:[], wl:false, pr:["zappi"], mainSwitchSplit:true },
@@ -161,7 +146,7 @@ const ApplianceIcon = ({ x, y, type, label }) => {
 };
 
 export function Diagram({ config }) {
-  const { sp, inv, ab, wl, pr, appliancesList = [], mainSwitchSplit = false } = config;
+  const { sp, inv, ab, wl, pr, appliancesList = [], mainSwitchSplit = false, ctrlCtsSupported = 3 } = config;
   const hasLibbi      = pr.includes("libbi");
   const libbiIsBat_dc = hasLibbi && inv.some(v=>v.dc&&v.db);
   const libbiIsBat_ac = hasLibbi && ab.length > 0;
@@ -190,8 +175,8 @@ export function Diagram({ config }) {
   const use1phHarvi  = !isMultiPh && wl;        // 1ph wireless: always single harvi left of zappi
   const solarToHarvi = !isMultiPh ? use1phHarvi : (inv.some(v=>v.ms));  // multi-ph: solar always to harvi
   // 3ph: controller needs harvi for grid if it can't support 3 CTs natively (eddi/GLO support only 2)
-  const CTRL_CTS = { "zappi":3, "eddi+":3, "eddi":2, "GLO":2, "libbi":3 };
-  const ctrlCtsSupported = CTRL_CTS[pr[0]] ?? 3;
+  // ctrlCtsSupported comes from config (sourced from PRODUCTS.ctsSupported in
+  // systembuilder.jsx) — not a second hardcoded copy here.
   const gridToHarvi  = wl || (is3ph && ctrlCtsSupported < 3);
   const showHarvi    = gridToHarvi || solarToHarvi;
 
@@ -208,8 +193,8 @@ export function Diagram({ config }) {
   const baseGap=44;
   const harviW=66, harviH=34, harviHGap=10, harviVGap=10;
   const devW=boardW, devH=36, secStep=56;
-  const devHOf = name => Math.round(devH * (DEVICE_SCALES[name] || 1));
-  const devWOf = name => Math.round(devW * (DEVICE_SCALES[name] || 1));
+  const devHOf = name => Math.round(devH * (DEVICE_REGISTRY[name]?.scale || 1));
+  const devWOf = name => Math.round(devW * (DEVICE_REGISTRY[name]?.scale || 1));
   const devGap = secStep - devH; // 20px — consistent visual gap between stacked devices
 
   // ── Inverter center Ys (account for DC battery spacing below prev) ──
@@ -431,7 +416,7 @@ export function Diagram({ config }) {
       {/* 1ph harvi — left of zappi */}
       {use1phHarvi && leftHarvi && (
         <>
-          <image href={harviImgUrl} x={leftHarvi.x} y={leftHarvi.topY} width={harviW} height={harviH} preserveAspectRatio="xMidYMid meet"/>
+          <image href={DEVICE_REGISTRY.harvi.icon} x={leftHarvi.x} y={leftHarvi.topY} width={harviW} height={harviH} preserveAspectRatio="xMidYMid meet"/>
           {/* WiFi centred on harvi bottom, 2px clear below box, waves pointing down toward zappi */}
           <WiFi cx={leftHarvi.cx} cy={leftHarvi.bottomY + 12} rotate={180} color={WHITE}/>
         </>
@@ -441,7 +426,7 @@ export function Diagram({ config }) {
       {!use1phHarvi && allHarvis.map((h,hi)=>{
         return (
           <g key={hi}>
-            <image href={harviImgUrl} x={h.x} y={h.topY} width={harviW} height={harviH} preserveAspectRatio="xMidYMid meet"/>
+            <image href={DEVICE_REGISTRY.harvi.icon} x={h.x} y={h.topY} width={harviW} height={harviH} preserveAspectRatio="xMidYMid meet"/>
             {/* WiFi centred on harvi bottom, 2px clear below box, waves pointing down toward zappi */}
             <WiFi cx={h.cx} cy={h.bottomY + 12} rotate={180} color={WHITE}/>
           </g>
@@ -459,13 +444,13 @@ export function Diagram({ config }) {
                 </clipPath>
               </defs>
               <rect x={d.x-devW/2} y={d.y} width={devW*2} height={zappiH} fill={DARK}/>
-              <image href={zappiImgUrl} x={d.x-devW/2} y={d.y} width={devW*2} height={zappiH}
+              <image href={DEVICE_REGISTRY.zappi.icon} x={d.x-devW/2} y={d.y} width={devW*2} height={zappiH}
                 preserveAspectRatio="xMidYMid meet" clipPath={`url(#zappi-clip-${i})`}/>
             </>
           ) : (
             <>
               <rect x={d.cx-devWOf(d.name)/2} y={d.y} width={devWOf(d.name)} height={devHOf(d.name)} fill={DARK}/>
-              <image href={DEVICE_IMGS[d.name]} x={d.cx-devWOf(d.name)/2} y={d.y} width={devWOf(d.name)} height={devHOf(d.name)} preserveAspectRatio="xMidYMid meet"/>
+              <image href={DEVICE_REGISTRY[d.name]?.icon} x={d.cx-devWOf(d.name)/2} y={d.y} width={devWOf(d.name)} height={devHOf(d.name)} preserveAspectRatio="xMidYMid meet"/>
             </>
           )}
         </g>
@@ -562,7 +547,7 @@ export function Diagram({ config }) {
                 )}
                 {!v.ms && <InvWire x1={ctX} y1={cy} x2={invLeftX} y2={cy} v={v}/>}
                 {isDcLibbi ? (
-                  <image href={libbiImgUrl} x={invCX-libbiDcW/2} y={cy-libbiDcH/2} width={libbiDcW} height={libbiDcH} preserveAspectRatio="xMidYMid meet"/>
+                  <image href={DEVICE_REGISTRY.libbi.icon} x={invCX-libbiDcW/2} y={cy-libbiDcH/2} width={libbiDcW} height={libbiDcH} preserveAspectRatio="xMidYMid meet"/>
                 ) : (
                   <>
                     {(() => {
