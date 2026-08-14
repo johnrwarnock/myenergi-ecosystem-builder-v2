@@ -16,6 +16,13 @@ jobs:
           node-version: 20
           cache: npm
 
+      - name: Use a modern npm
+        # A large npm major-version gap between the runner's bundled npm and
+        # whatever generated package-lock.json can make `npm ci` reject a
+        # lockfile that's actually in sync — pin explicitly rather than
+        # trusting whatever ships with the Node version above.
+        run: npm install -g npm@11
+
       - name: Install dependencies
         run: npm ci
 
