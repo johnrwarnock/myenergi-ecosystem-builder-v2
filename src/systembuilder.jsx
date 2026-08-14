@@ -103,7 +103,7 @@ const APPLIANCE_OPTIONS = [
 ];
 
 // ── Translate SystemBuilder state → Diagram config ───────────────────────────
-function buildDiagramConfig(cfg, wireless, monitorSolar, monitorBattery, controllerProductId, zappiSinglePhase = false) {
+function buildDiagramConfig(cfg, wireless, monitorSolar, monitorBattery, controllerProductId, zappiSinglePhase = false, mainSwitchSplit = false) {
   const { phase, inverters = [], batteries = [], selections = {}, eddiAppliances = {} } = cfg;
 
   const sp = phase || "1ph";
@@ -176,7 +176,7 @@ function buildDiagramConfig(cfg, wireless, monitorSolar, monitorBattery, control
     }
   });
 
-  return { sp, inv, ab, wl: wlFinal, pr, appliancesList };
+  return { sp, inv, ab, wl: wlFinal, pr, appliancesList, mainSwitchSplit };
 }
 
 const ICON_URLS = {
@@ -806,6 +806,8 @@ export default function App() {
   const [monitorSolar, setMonitorSolar] = useState(true);
   const [monitorBattery, setMonitorBattery] = useState(true);
   const [controllerProductId, setControllerProductId] = useState(2);
+  const [mainSwitchSplit, setMainSwitchSplit] = useState(false);
+  const [notes, setNotes] = useState("");
 
   const setPhase = v => setCfg(c => ({ ...c, phase: v }));
   const setInverters = fn => setCfg(c => ({ ...c, inverters: fn(c.inverters) }));
@@ -837,6 +839,8 @@ export default function App() {
       @media print {
         #step-tabs { display: none !important; }
         .no-print  { display: none !important; }
+        .notes-textarea { display: none !important; }
+        .notes-print { display: block !important; }
         #results-page { zoom: 0.72; }
         html { height: 99%; }
         #sb-app {
@@ -934,11 +938,11 @@ export default function App() {
     }
   };
 
-  const goToResults = () => { setMonitorSolar(true); setMonitorBattery(true); setStep(2); };
+  const goToResults = () => setStep(2);
   const resetAll = () => {
     setStep(0);
     setCfg({ phase: null, inverters: [], batteries: [], selections: {}, eddiAppliances: {} });
-    setWireless(false); setMonitorSolar(true); setMonitorBattery(true); setControllerProductId(2);
+    setWireless(false); setMonitorSolar(true); setMonitorBattery(true); setControllerProductId(2); setMainSwitchSplit(false); setNotes("");
   };
 
   return (
@@ -1118,7 +1122,8 @@ export default function App() {
         {step === 2 && result && (() => {
           const harviTotal = result.harvisNeeded + (effectiveWireless && cfg.phase === "1ph" ? 1 : 0) + (zappiSinglePhase && cfg.phase === "3ph" ? 1 : 0);
           const showZappiSinglePhase = cfg.phase === "3ph" && result.selProds.some(p => p.id === 2 && p.qty > 0);
-          const diagramConfig = buildDiagramConfig(cfg, effectiveWireless, monitorSolar, monitorBattery, controllerProductId, zappiSinglePhase);
+          const hasBatteryForSplit = result.hasAcBat || cfg.inverters.some(i => i.hasCoupledBat);
+          const diagramConfig = buildDiagramConfig(cfg, effectiveWireless, monitorSolar, monitorBattery, controllerProductId, zappiSinglePhase, mainSwitchSplit);
           const plainEnglish = generatePlainEnglish(result, ctConfig, effectiveWireless, cfg, harviTotal);
           return (
             <div id="results-page">
@@ -1136,12 +1141,11 @@ export default function App() {
               </div>
 
               {/* Monitoring options */}
-              {(result.hasSolar || result.hasAcBat) && (
+              {result.hasAcBat && (
                 <div style={{ marginBottom: 16, fontSize: 13 }}>
                   <SecLabel>Monitoring Options</SecLabel>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {result.hasSolar && <Checkbox checked={monitorSolar} onChange={() => setMonitorSolar(m => !m)} label="Monitor solar generation" sub="Required to see self-consumption % and solar output on your myenergi device + app. Solar-aware charging is not impacted."/>}
-                    {result.hasAcBat && <Checkbox checked={monitorBattery} onChange={() => setMonitorBattery(m => !m)} label="Monitor battery output" sub="Shows battery charge/discharge on your myenergi device + app. Solar-aware charging is not impacted."/>}
+                    <Checkbox checked={monitorBattery} onChange={() => setMonitorBattery(m => !m)} label="Monitor battery output" sub="Shows battery charge/discharge on your myenergi device + app. Solar-aware charging is not impacted."/>
                   </div>
                 </div>
               )}
@@ -1179,15 +1183,10 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Wireless CT */}
-              {cfg.phase === "1ph" && !ctrlForcesWireless && (
+              {/* Monitor solar generation */}
+              {result.hasSolar && (
                 <div style={{ marginBottom: 20 }}>
-                  <Checkbox checked={wireless} onChange={() => setWireless(w => !w)} label="Use wireless CT connection (harvi)" sub="Tick if CTs will connect via harvi instead of directly to the myenergi device" color={YELLOW}/>
-                </div>
-              )}
-              {cfg.phase === "1ph" && ctrlForcesWireless && (
-                <div style={{ marginBottom: 20, padding: "10px 14px", background: "rgba(160,104,0,0.06)", border: `1px solid rgba(160,104,0,0.3)`, borderRadius: 6, fontSize: 12, color: YELLOW }}>
-                  ⚠ Wireless CT connection (harvi) is required — the selected controller device only supports 2 CT inputs.
+                  <Checkbox checked={monitorSolar} onChange={() => setMonitorSolar(m => !m)} label="Monitor solar generation" sub="Required to see self-consumption % and solar output on your myenergi device + app. Solar-aware charging is not impacted."/>
                 </div>
               )}
 
@@ -1209,28 +1208,51 @@ export default function App() {
                 </div>
               )}
 
-              {/* Stat boxes */}
-              <div style={{ display: "flex", gap: 10, marginBottom: 24 }}>
-                {statBox("CTs Required", result.totalCTs, "#fff")}
-                {statBox("CTs Included", result.ctsIncluded, "#fff")}
-                {statBox("Additional CTs", result.additionalCTs, result.additionalCTs > 0 ? WARN : MUTED)}
-                {statBox("harvis Required", harviTotal, harviTotal > 0 ? YELLOW : MUTED)}
-              </div>
-
-              {/* Plain-English translation */}
-              <div style={{ marginBottom: 20, padding: "14px 16px", background: "rgba(64,255,122,0.06)", border: `1px solid rgba(64,255,122,0.25)`, borderRadius: 8 }}>
-                <div style={{ fontSize: 12, color: G_TXT, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>In Plain English</div>
-                {plainEnglish.map((line, i) => (
-                  <p key={i} style={{ margin: "0 0 6px", fontSize: 13, color: "#ccc", lineHeight: 1.55 }}>{line}</p>
-                ))}
-              </div>
-
               {/* Wiring Diagram */}
               <div style={{ marginBottom: 24, marginLeft: -48, marginRight: -48 }}>
                 <div style={{ fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8, paddingLeft: 48 }}>Wiring Diagram</div>
                 <div style={{ padding: "0 54px" }}>
                   <Diagram config={diagramConfig} />
                 </div>
+              </div>
+
+              {/* Wireless CT */}
+              {cfg.phase === "1ph" && !ctrlForcesWireless && (
+                <div style={{ marginBottom: 20 }}>
+                  <Checkbox checked={wireless} onChange={() => setWireless(w => !w)} label="Use wireless CT connection (harvi)" sub="Tick if CTs will connect via harvi instead of directly to the myenergi device" color={YELLOW}/>
+                </div>
+              )}
+              {cfg.phase === "1ph" && ctrlForcesWireless && (
+                <div style={{ marginBottom: 20, padding: "10px 14px", background: "rgba(160,104,0,0.06)", border: `1px solid rgba(160,104,0,0.3)`, borderRadius: 6, fontSize: 12, color: YELLOW }}>
+                  ⚠ Wireless CT connection (harvi) is required — the selected controller device only supports 2 CT inputs.
+                </div>
+              )}
+
+              {/* myenergi device split from battery-fed supply */}
+              {hasBatteryForSplit && (
+                <div style={{ marginBottom: 20 }}>
+                  <Checkbox
+                    checked={mainSwitchSplit}
+                    onChange={() => setMainSwitchSplit(s => !s)}
+                    label="Allow the myenergi device to charge from grid without drawing from the battery"
+                    sub="Useful if you're on a cheap overnight grid tariff and want to charge without the home battery discharging to cover it."
+                    color={YELLOW}
+                  />
+                  {mainSwitchSplit && (
+                    <div style={{ marginTop: 8, padding: "10px 14px", background: "rgba(160,104,0,0.06)", border: `1px solid rgba(160,104,0,0.3)`, borderRadius: 6, fontSize: 12, color: YELLOW, lineHeight: 1.55 }}>
+                      <p style={{ margin: "0 0 8px" }}>⚠ Achieved by wiring the myenergi device on its own circuit, separate from the battery-fed property supply, so the battery's own system never sees it as a load to cover. In GB, this split is commonly made with a Henley block at the meter tails. In AU/NZ, Henley blocks aren't used for this — the load side of the main switch is split instead. Confirm the correct method and equipment for your region with local wiring rules. The myenergi grid CT stays positioned before the split so it still reads total site import/export for zero-export control; a separate CT on the property side (fitted by the inverter/battery installer) monitors only the property's own load.</p>
+                      <p style={{ margin: 0 }}>Alternatively, the same outcome can be reached without rewiring — by scheduling the battery and the myenergi device to charge from grid at the same time. Check with your battery installer or manufacturer on how to configure this.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Stat boxes */}
+              <div style={{ display: "flex", gap: 10, marginBottom: 24 }}>
+                {statBox("CTs Required", result.totalCTs, "#fff")}
+                {statBox("CTs Included", result.ctsIncluded, "#fff")}
+                {statBox("Additional CTs", result.additionalCTs, result.additionalCTs > 0 ? WARN : MUTED)}
+                {statBox("harvis Required", harviTotal, harviTotal > 0 ? YELLOW : MUTED)}
               </div>
 
               {/* CT Requirements table */}
@@ -1270,6 +1292,14 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Plain-English translation */}
+              <div style={{ marginBottom: 20, padding: "14px 16px", background: "rgba(64,255,122,0.06)", border: `1px solid rgba(64,255,122,0.25)`, borderRadius: 8 }}>
+                <div style={{ fontSize: 12, color: G_TXT, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>In Plain English</div>
+                {plainEnglish.map((line, i) => (
+                  <p key={i} style={{ margin: "0 0 6px", fontSize: 13, color: "#ccc", lineHeight: 1.55 }}>{line}</p>
+                ))}
+              </div>
+
               {/* Bill of Materials */}
               <div style={{ marginBottom: 24 }}>
                 <SecLabel>Bill of Materials</SecLabel>
@@ -1299,13 +1329,20 @@ export default function App() {
               <div style={{ marginBottom: 32 }}>
                 <div style={{ fontSize: 10, color: MUTED, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>Notes</div>
                 <textarea
+                  className="notes-textarea"
+                  value={notes}
+                  onChange={e => setNotes(e.target.value)}
                   placeholder="Add notes here…"
                   style={{ width: "100%", minHeight: 100, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 6, color: "#ddd", padding: "10px 12px", fontSize: 14, fontFamily: "inherit", resize: "vertical", boxSizing: "border-box" }}
                 />
+                <div className="notes-print" style={{ display: "none", whiteSpace: "pre-wrap", wordBreak: "break-word", fontSize: 12, lineHeight: 1.5, border: "1px solid #ccc", borderRadius: 6, padding: "10px 12px", minHeight: 60 }}>
+                  {notes || "—"}
+                </div>
               </div>
 
               {/* Actions */}
               <div className="no-print" style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <BackBtn onClick={() => setStep(1)}/>
                 <button onClick={resetAll} style={{ background: "none", border: `1px solid ${BORDER}`, color: "#aaa", borderRadius: 999, padding: "11px 24px", fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>← Start over</button>
                 <button onClick={exportPDF} style={{ background: G, color: "#000", border: "none", borderRadius: 999, padding: "11px 24px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Export PDF</button>
               </div>

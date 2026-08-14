@@ -27,7 +27,7 @@ const DEVICE_IMGS = {
   GLO:   gloImgUrl,
 };
 // Scale multipliers relative to base devW/devH
-const DEVICE_SCALES = { zappi:2, eddi:1.5, "eddi+":1.5, libbi:2.25 };
+const DEVICE_SCALES = { zappi:2, eddi:1.5, "eddi+":1.5, libbi:2.25, GLO:2 };
 
 const CONFIGS = {
   "1ph · solar":        { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}],  ab:[],          wl:false, pr:["zappi"] },
@@ -44,6 +44,7 @@ const CONFIGS = {
   "full mix":           { sp:"3ph", inv:[{ph:"3ph",dc:true,db:true,ms:true},{ph:"1ph",dc:false,db:false,ms:true}], ab:[], wl:false, pr:["zappi","eddi","libbi"] },
   "1ph · libbi AC":  { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}], ab:[{mb:false}], wl:false, pr:["zappi","libbi"] },
   "1ph · libbi DC":  { sp:"1ph", inv:[{ph:"1ph",dc:true, db:true, ms:true}], ab:[],           wl:false, pr:["zappi","libbi"] },
+  "1ph · main switch split": { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}], ab:[{mb:true}], wl:false, pr:["zappi"], mainSwitchSplit:true },
 };
 
 const CT = ({ x, y, label }) => (
@@ -142,7 +143,7 @@ const ApplianceIcon = ({ x, y, type, label }) => {
 };
 
 export function Diagram({ config }) {
-  const { sp, inv, ab, wl, pr, appliancesList = [] } = config;
+  const { sp, inv, ab, wl, pr, appliancesList = [], mainSwitchSplit = false } = config;
   const hasLibbi      = pr.includes("libbi");
   const libbiIsBat_dc = hasLibbi && inv.some(v=>v.dc&&v.db);
   const libbiIsBat_ac = hasLibbi && ab.length > 0;
@@ -156,6 +157,8 @@ export function Diagram({ config }) {
   const siteXOs = is3ph ? [-5,0,5] : is2ph ? [-2.5, 2.5] : [0];
   const hasSolar   = inv.length > 0;
   const hasACBat   = ab.length > 0;
+  const hasAnyBat  = hasACBat || inv.some(v => v.dc);
+  const showMainSwitch = mainSwitchSplit && hasAnyBat;
   const multiInv   = inv.length > 1;
   const iIs3 = v => v.ph==="3ph"||v.ph==="2ph";
   const iOs  = v => iIs3(v)?[-phSp,0,phSp]:[0];
@@ -320,7 +323,18 @@ export function Diagram({ config }) {
   }
 
   // ── Helpers ───────────────────────────────────────────────
-  const gridCtX = Math.round(meterX+meterW+(boardX-meterX-meterW)*0.75);
+  // When split at the main switch: grid CT stays upstream (sees total site flow),
+  // then the main switch is the central fork — switchboard fed from its top,
+  // myenergi device fed from its bottom. Property CT sits on the switchboard
+  // branch, above the board, and reports back to the inverter/battery.
+  const busSegStart = meterX + meterW;
+  const busSegSpan  = boardX - busSegStart;
+  const gridCtX = Math.round(busSegStart + busSegSpan * (showMainSwitch ? 0.3 : 0.75));
+  const mainSwitchX = showMainSwitch ? Math.round(busSegStart + busSegSpan * 0.65) : 0;
+  const topY = busY - 60;
+  const propertyCtX = showMainSwitch ? Math.round(mainSwitchX + (boardCX - mainSwitchX) * 0.55) : 0;
+  const propDashY = topY - 18;
+  const bypassY = busY + boardH/2 + 24;
 
   const SiteWire = ({x1,y1,x2,y2,color=WHITE}) => <>{siteOs.map((o,i)=>(
     <line key={i} x1={x1} y1={y1+o} x2={x2} y2={y2+o} stroke={color} strokeWidth={isMultiPh?2.5:3}/>
@@ -353,21 +367,52 @@ export function Diagram({ config }) {
       <SiteWire x1={pylonX+50} y1={busY} x2={meterX} y2={busY}/>
       <Blk x={meterX} y={busY-meterH/2} w={meterW} h={meterH} label="METER" bc={WHITE} lc={WHITE}/>
 
-      {/* Meter → Grid CT → Board */}
+      {/* Meter → Grid CT → Main switch (or straight to board if no split) */}
       <SiteWire x1={meterX+meterW} y1={busY} x2={gridCtX-7} y2={busY}/>
       <SiteCTs x={gridCtX} y={busY} label={is3ph?"Grid CT×3":is2ph?"Grid CT×2":"Grid CT1"}/>
       <SigSet ctX={gridCtX} ctY={busY} osArr={siteOs} xsArr={siteXOs} dxs={gridDestXs} dy={gridDestY}/>
-      <SiteWire x1={gridCtX+7} y1={busY} x2={boardX} y2={busY}/>
+      <SiteWire x1={gridCtX+7} y1={busY} x2={showMainSwitch ? mainSwitchX-7 : boardX} y2={busY}/>
 
       {/* Main Switchboard */}
       <text x={boardCX} y={busY-boardH/2-10} textAnchor="middle" fill={WHITE} fontSize={8} fontWeight="700" fontFamily="Overpass,sans-serif">MAIN SWITCHBOARD</text>
       <image href={mainSbImgUrl} x={boardX} y={busY-boardH/2} width={boardW} height={boardH} preserveAspectRatio="none"/>
 
-      {/* Individual circuit lines — one straight vertical line per device from switchboard */}
+      {/* Individual circuit lines — one straight vertical line per device */}
       {devPositions.map((d, i) => (
-        <line key={i} x1={d.cx} y1={busY+boardH/2} x2={d.cx} y2={d.y}
+        <line key={i} x1={d.cx} y1={showMainSwitch ? bypassY : busY+boardH/2} x2={d.cx} y2={d.y}
           stroke={WHITE} strokeWidth={d.isCtrl ? 3 : 2.5}/>
       ))}
+
+      {/* Main switch — central fork: switchboard fed from the top, myenergi device fed from the bottom */}
+      {showMainSwitch && (() => {
+        const propTarget = hasSolar
+          ? { x: invX, y: invCYs[0] }
+          : { x: acBatCX, y: acBatTopY + acBatH/2 };
+        return (
+          <>
+            {/* Switch body, centred on the incoming supply line */}
+            <rect x={mainSwitchX-7} y={busY-7} width={14} height={14} rx={2} fill={BOX_BG} stroke={WHITE} strokeWidth={1.5}/>
+
+            {/* Top branch → switchboard */}
+            <line x1={mainSwitchX} y1={busY-7} x2={mainSwitchX} y2={topY} stroke={WHITE} strokeWidth={2.5}/>
+            <line x1={mainSwitchX} y1={topY} x2={boardCX} y2={topY} stroke={WHITE} strokeWidth={2.5}/>
+            <line x1={boardCX} y1={topY} x2={boardCX} y2={busY-boardH/2} stroke={WHITE} strokeWidth={2.5}/>
+            <text x={(mainSwitchX+boardCX)/2} y={topY-8} textAnchor="middle" fill={WHITE} fontSize={7.5} fontWeight="700" fontFamily="Overpass,sans-serif">MAIN SWITCH</text>
+
+            {/* Bottom branch → myenergi device */}
+            <line x1={mainSwitchX} y1={busY+7} x2={mainSwitchX} y2={bypassY} stroke={WHITE} strokeWidth={2.5}/>
+            {devPositions.map((d,i) => (
+              <line key={`byp-${i}`} x1={mainSwitchX} y1={bypassY} x2={d.cx} y2={bypassY} stroke={WHITE} strokeWidth={d.isCtrl?3:2.5}/>
+            ))}
+
+            {/* Property-side CT — on the switchboard branch, belongs to the inverter/battery, monitors the property load only */}
+            <CT x={propertyCtX} y={topY} label="Property CT"/>
+            <line x1={propertyCtX} y1={topY-8} x2={propertyCtX} y2={propDashY} stroke={SIG} strokeWidth={1.3} strokeDasharray="7 4"/>
+            <line x1={propertyCtX} y1={propDashY} x2={propTarget.x} y2={propDashY} stroke={SIG} strokeWidth={1.3} strokeDasharray="7 4"/>
+            <line x1={propTarget.x} y1={propDashY} x2={propTarget.x} y2={propTarget.y} stroke={SIG} strokeWidth={1.3} strokeDasharray="7 4"/>
+          </>
+        );
+      })()}
 
       {/* 1ph harvi — left of zappi */}
       {use1phHarvi && leftHarvi && (
