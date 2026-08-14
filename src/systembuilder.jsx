@@ -18,7 +18,7 @@ const WARN   = "#ff008c";   // Accent 2 — warnings & errors
 const YELLOW = "#ff008c";   // Accent 2 — harvi / wireless indicator
 const BLUE   = "#56c1dd";   // info blue
 
-const INVERTER_BRANDS = [
+export const INVERTER_BRANDS = [
   { name: "myenergi libbi",       acOnly: false, allInOne: true,  autoBatId: 14 },
   { name: "Tesla Powerwall 3",    acOnly: false, allInOne: true,  autoBatId: 2  },
   { name: "Sigenergy",            acOnly: false, allInOne: true,  autoBatId: 4  },
@@ -38,7 +38,7 @@ const INVERTER_BRANDS = [
   { name: "Other (all-in-one)",               acOnly: false, allInOne: true,  autoBatId: 99 },
 ];
 
-const BATTERIES = [
+export const BATTERIES = [
   { id: 14, label: "myenergi libbi",             type: "AC or DC" },
   { id: 4,  label: "Sigenergy SigenStor",        type: "DC Hybrid" },
   { id: 1,  label: "Tesla Powerwall 2",          type: "AC Coupled" },
@@ -57,10 +57,10 @@ const BATTERIES = [
   { id: 99, label: "Other",                     type: null },
 ];
 
-const DC_BATTERIES = BATTERIES.filter(b => b.type === "DC Hybrid" || b.type === "AC or DC" || b.id === 99);
-const AC_BATTERIES = BATTERIES.filter(b => b.type === "AC Coupled" || b.type === "AC or DC" || b.id === 99);
+export const DC_BATTERIES = BATTERIES.filter(b => b.type === "DC Hybrid" || b.type === "AC or DC" || b.id === 99);
+export const AC_BATTERIES = BATTERIES.filter(b => b.type === "AC Coupled" || b.type === "AC or DC" || b.id === 99);
 
-const PRODUCTS = [
+export const PRODUCTS = [
   {
     id: 2, name: "zappi multiphase (7 / 22kW)", friendlyName: "zappi",
     tagline: "Smart EV Charger",
@@ -103,7 +103,7 @@ const APPLIANCE_OPTIONS = [
 ];
 
 // ── Translate SystemBuilder state → Diagram config ───────────────────────────
-function buildDiagramConfig(cfg, wireless, monitorSolar, monitorBattery, controllerProductId, zappiSinglePhase = false, mainSwitchSplit = false) {
+export function buildDiagramConfig(cfg, wireless, monitorSolar, monitorBattery, controllerProductId, zappiSinglePhase = false, mainSwitchSplit = false) {
   const { phase, inverters = [], batteries = [], selections = {}, eddiAppliances = {} } = cfg;
 
   const sp = phase || "1ph";
@@ -205,7 +205,7 @@ function Icon({ name }) {
 const newInv = () => ({ uid: Math.random(), brand: "", phase: "", hasCoupledBat: false, coupledBatId: "", coupledBatMode: "" });
 const newBat = () => ({ uid: Math.random(), id: "", mode: "" });
 
-function resolveStandaloneBatType(bat) {
+export function resolveStandaloneBatType(bat) {
   const found = AC_BATTERIES.find(b => b.id === parseInt(bat.id));
   if (!found) return null;
   if (found.type === "AC or DC") return bat.mode || null;
@@ -213,7 +213,7 @@ function resolveStandaloneBatType(bat) {
   return found.type;
 }
 
-function calcResults(cfg, monitorSolar, monitorBattery, controllerProductId) {
+export function calcResults(cfg, monitorSolar, monitorBattery, controllerProductId) {
   const { phase, inverters, batteries, selections } = cfg;
   if (!phase) return null;
   const is1ph = phase === "1ph", is2ph = phase === "2ph", is3ph = phase === "3ph";
@@ -283,7 +283,7 @@ function calcResults(cfg, monitorSolar, monitorBattery, controllerProductId) {
 }
 
 // ── Plain-English CT summary ──────────────────────────────────────────────────
-function generatePlainEnglish(result, ctConfig, effectiveWireless, cfg, harviTotal) {
+export function generatePlainEnglish(result, ctConfig, effectiveWireless, cfg, harviTotal) {
   if (!result) return [];
   const { totalCTs, ctsIncluded, additionalCTs, harvisNeeded } = result;
   const lines = [];

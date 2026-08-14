@@ -23,4 +23,8 @@ export default defineConfig({
       external: ["canvg", "dompurify"],
     },
   },
+  test: {
+    environment: 'node',
+    include: ['src/**/*.test.js'],
+  },
 })
