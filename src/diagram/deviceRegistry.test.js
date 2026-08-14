@@ -15,9 +15,12 @@ describe('DEVICE_REGISTRY covers every PRODUCTS entry', () => {
     expect(missing, `PRODUCTS entries with no DEVICE_REGISTRY match: ${missing.join(', ')}`).toEqual([]);
   });
 
-  it('every registry entry has an icon and a positive scale', () => {
+  it('every registry entry has a positive scale, and icon is either a real URL or an explicit null (documented "no artwork yet" fallback)', () => {
     for (const [name, spec] of Object.entries(DEVICE_REGISTRY)) {
-      expect(spec.icon, `${name} missing icon`).toBeTruthy();
+      expect(
+        spec.icon === null || (typeof spec.icon === 'string' && spec.icon.length > 0),
+        `${name}.icon must be null or a non-empty string, got ${JSON.stringify(spec.icon)}`
+      ).toBe(true);
       expect(spec.scale, `${name} missing/invalid scale`).toBeGreaterThan(0);
     }
   });

@@ -20,6 +20,7 @@ const BLUE   = "#56c1dd";   // info blue
 
 export const INVERTER_BRANDS = [
   { name: "myenergi libbi",       acOnly: false, allInOne: true,  autoBatId: 14 },
+  { name: "myenergi libbi 2",     acOnly: false, allInOne: true,  autoBatId: 18 },
   { name: "Tesla Powerwall 3",    acOnly: false, allInOne: true,  autoBatId: 2  },
   { name: "Sigenergy",            acOnly: false, allInOne: true,  autoBatId: 4  },
   { name: "Alpha ESS",            acOnly: false, allInOne: true,  autoBatId: 6  },
@@ -40,6 +41,7 @@ export const INVERTER_BRANDS = [
 
 export const BATTERIES = [
   { id: 14, label: "myenergi libbi",             type: "AC or DC" },
+  { id: 18, label: "myenergi libbi 2",           type: "AC or DC" },
   { id: 4,  label: "Sigenergy SigenStor",        type: "DC Hybrid" },
   { id: 1,  label: "Tesla Powerwall 2",          type: "AC Coupled" },
   { id: 2,  label: "Tesla Powerwall 3",          type: "AC or DC" },
@@ -91,6 +93,14 @@ export const PRODUCTS = [
     desc: "Stores surplus solar energy to power your home in the evening or during grid outages.",
     ctsIncluded: 1, ctsSupported: 3,
   },
+  {
+    id: 7, name: "libbi 2", friendlyName: "libbi2",
+    tagline: "Home Battery System",
+    desc: "Next-generation myenergi home battery with a dedicated controller and optional CSIP-AUS compliance support.",
+    // CT capacity unconfirmed — placeholder matching libbi 1 until the
+    // product team confirms libbi 2's actual figures.
+    ctsIncluded: 1, ctsSupported: 3,
+  },
 ];
 
 const APPLIANCE_OPTIONS = [
@@ -103,7 +113,7 @@ const APPLIANCE_OPTIONS = [
 ];
 
 // ── Translate SystemBuilder state → Diagram config ───────────────────────────
-export function buildDiagramConfig(cfg, wireless, monitorSolar, monitorBattery, controllerProductId, zappiSinglePhase = false, mainSwitchSplit = false) {
+export function buildDiagramConfig(cfg, wireless, monitorSolar, monitorBattery, controllerProductId, zappiSinglePhase = false, mainSwitchSplit = false, csipRequired = false) {
   const { phase, inverters = [], batteries = [], selections = {}, eddiAppliances = {} } = cfg;
 
   const sp = phase || "1ph";
@@ -147,6 +157,7 @@ export function buildDiagramConfig(cfg, wireless, monitorSolar, monitorBattery, 
     { id: 4, name: "eddi" },
     { id: 3, name: "GLO" },
     { id: 6, name: "libbi" },
+    { id: 7, name: "libbi2" },
   ];
   const pr = [];
   const ctrlEntry = ORDER.find(p => p.id === controllerProductId);
@@ -185,7 +196,7 @@ export function buildDiagramConfig(cfg, wireless, monitorSolar, monitorBattery, 
   const ctrlProduct = PRODUCTS.find(p => p.friendlyName === pr[0]);
   const ctrlCtsSupported = ctrlProduct?.ctsSupported ?? 3;
 
-  return { sp, inv, ab, wl: wlFinal, pr, appliancesList, mainSwitchSplit, ctrlCtsSupported };
+  return { sp, inv, ab, wl: wlFinal, pr, appliancesList, mainSwitchSplit, ctrlCtsSupported, csipRequired };
 }
 
 const ICON_URLS = {
@@ -249,6 +260,15 @@ export function calcResults(cfg, monitorSolar, monitorBattery, controllerProduct
         comps.push({ label: `Battery (AC): ${found?.label || ""}`, cts: 1, isBattery: true });
       }
     });
+  }
+
+  // libbi 2's dedicated controller carries its own metering CT — required
+  // hardware, not an optional monitoring choice, so it's counted regardless
+  // of monitorSolar/monitorBattery (same treatment as the grid CT). The
+  // CSIP-AUS controller is comms-only and never adds a CT.
+  const libbi2Qty = selections?.[7] || 0;
+  for (let i = 0; i < libbi2Qty; i++) {
+    comps.push({ label: "libbi controller", cts: 1, isBattery: true });
   }
 
   const validComps = comps;
@@ -816,6 +836,7 @@ export default function App() {
   const [monitorBattery, setMonitorBattery] = useState(true);
   const [controllerProductId, setControllerProductId] = useState(2);
   const [mainSwitchSplit, setMainSwitchSplit] = useState(false);
+  const [csipRequired, setCsipRequired] = useState(false);
   const [notes, setNotes] = useState("");
 
   // GLO defaults to the simple case — no solar monitoring, hard-wired CTs —
@@ -959,7 +980,7 @@ export default function App() {
   const resetAll = () => {
     setStep(0);
     setCfg({ phase: null, inverters: [], batteries: [], selections: {}, eddiAppliances: {} });
-    setWireless(false); setMonitorSolar(true); setMonitorBattery(true); setControllerProductId(2); setMainSwitchSplit(false); setNotes("");
+    setWireless(false); setMonitorSolar(true); setMonitorBattery(true); setControllerProductId(2); setMainSwitchSplit(false); setCsipRequired(false); setNotes("");
   };
 
   return (
@@ -1072,7 +1093,9 @@ export default function App() {
                         <div style={{ display: "flex", alignItems: "center", gap: 14, flex: 1, minWidth: 0 }}>
                           {/* Thumbnail */}
                           <div style={{ width: 52, height: 52, background: CARD, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden", padding: 6, boxSizing: "border-box" }}>
-                            {imgUrl && <img src={imgUrl} alt={p.friendlyName} style={{ width: "100%", height: "100%", objectFit: "contain" }}/>}
+                            {imgUrl
+                              ? <img src={imgUrl} alt={p.friendlyName} style={{ width: "100%", height: "100%", objectFit: "contain" }}/>
+                              : <span style={{ fontSize: 9, color: MUTED, textAlign: "center" }}>{p.friendlyName}</span>}
                           </div>
                           {/* Text */}
                           <div style={{ minWidth: 0 }}>
@@ -1140,7 +1163,8 @@ export default function App() {
           const harviTotal = result.harvisNeeded + (effectiveWireless && cfg.phase === "1ph" ? 1 : 0) + (zappiSinglePhase && cfg.phase === "3ph" ? 1 : 0);
           const showZappiSinglePhase = cfg.phase === "3ph" && result.selProds.some(p => p.id === 2 && p.qty > 0);
           const hasBatteryForSplit = result.hasAcBat || cfg.inverters.some(i => i.hasCoupledBat);
-          const diagramConfig = buildDiagramConfig(cfg, effectiveWireless, monitorSolar, monitorBattery, controllerProductId, zappiSinglePhase, mainSwitchSplit);
+          const hasLibbi2 = (cfg.selections[7] || 0) > 0;
+          const diagramConfig = buildDiagramConfig(cfg, effectiveWireless, monitorSolar, monitorBattery, controllerProductId, zappiSinglePhase, mainSwitchSplit, hasLibbi2 && csipRequired);
           const plainEnglish = generatePlainEnglish(result, ctConfig, effectiveWireless, cfg, harviTotal);
           return (
             <div id="results-page">
@@ -1261,6 +1285,19 @@ export default function App() {
                       <p style={{ margin: 0 }}>Alternatively, the same outcome can be reached without rewiring — by scheduling the battery and the myenergi device to charge from grid at the same time. Check with your battery installer or manufacturer on how to configure this.</p>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* CSIP-AUS controller — libbi 2 only, off by default (region/compliance dependent) */}
+              {hasLibbi2 && (
+                <div style={{ marginBottom: 20 }}>
+                  <Checkbox
+                    checked={csipRequired}
+                    onChange={() => setCsipRequired(c => !c)}
+                    label="Include a CSIP-AUS controller"
+                    sub="Tick if this site needs CSIP-AUS compliant dynamic export control. Comms-only — doesn't add a CT to the bill of materials."
+                    color={YELLOW}
+                  />
                 </div>
               )}
 

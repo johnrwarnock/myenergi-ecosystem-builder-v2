@@ -48,6 +48,11 @@ const CONFIGS = {
   "2× zappi":                { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}], ab:[], wl:false, pr:["zappi","zappi"] },
   "3× zappi + eddi":         { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}], ab:[], wl:false, pr:["zappi","zappi","zappi","eddi"] },
   "2× GLO":                  { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}], ab:[], wl:false, pr:["zappi","GLO","GLO"] },
+  "libbi 2 (AC, no CSIP)":   { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}], ab:[{mb:true,label:"myenergi libbi 2"}], wl:false, pr:["zappi"] },
+  "libbi 2 (AC + CSIP)":     { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}], ab:[{mb:true,label:"myenergi libbi 2"}], wl:false, pr:["zappi"], csipRequired:true },
+  "libbi 2 (AC + CSIP, 3ph)":{ sp:"3ph", inv:[{ph:"3ph",dc:false,db:false,ms:true}], ab:[{mb:true,label:"myenergi libbi 2"}], wl:false, pr:["zappi"], csipRequired:true },
+  "libbi 2 solo (trunk)":    { sp:"1ph", inv:[], ab:[], wl:false, pr:["libbi2"] },
+  "libbi 2 DC hybrid":       { sp:"1ph", inv:[{ph:"1ph",dc:true,db:true,ms:true}], ab:[], wl:false, pr:["zappi","libbi2"] },
 };
 
 const CT = ({ x, y, label }) => (
@@ -146,8 +151,12 @@ const ApplianceIcon = ({ x, y, type, label }) => {
 };
 
 export function Diagram({ config }) {
-  const { sp, inv, ab, wl, pr, appliancesList = [], mainSwitchSplit = false, ctrlCtsSupported = 3 } = config;
-  const hasLibbi      = pr.includes("libbi");
+  const { sp, inv, ab, wl, pr, appliancesList = [], mainSwitchSplit = false, ctrlCtsSupported = 3, csipRequired = false } = config;
+  // "libbi" here means any coupled-battery-capable device (libbi, libbi2) —
+  // driven by the registry's `couples` flag rather than a hardcoded name, so
+  // a second such product doesn't need new string checks scattered around.
+  const coupledDeviceName = pr.find(n => DEVICE_REGISTRY[n]?.couples);
+  const hasLibbi      = !!coupledDeviceName;
   const libbiIsBat_dc = hasLibbi && inv.some(v=>v.dc&&v.db);
   const libbiIsBat_ac = hasLibbi && ab.length > 0;
   const libbiImgW=44, libbiImgH=80;
@@ -238,7 +247,7 @@ export function Diagram({ config }) {
   const extraGap = (!isMultiPh && hasSolar && hasACBat) ? Math.round(baseGap*0.5) : 0;
   const minCtrlTopY = busY + boardH/2 + 122; // 322 — matches 3ph-solar gap
   let ctrlTopY = Math.max(rightBottom + baseGap + extraGap, minCtrlTopY);
-  const devList = libbiIsBat_dc || libbiIsBat_ac ? pr.filter(n=>n!=="libbi") : pr;
+  const devList = libbiIsBat_dc || libbiIsBat_ac ? pr.filter(n=>n!==coupledDeviceName) : pr;
   const ctrlX = boardCX-devW/2;
   const ctrlCX = boardCX;
 
@@ -287,7 +296,7 @@ export function Diagram({ config }) {
   const solarLandXs = nSitePh===3 ? [ctrlCX+2, ctrlCX+10,ctrlCX+18] : nSitePh===2 ? [ctrlCX+5,ctrlCX+13] : [ctrlCX+8];
 
   // When libbi is AC battery AND controller, grid CTs connect directly to libbi
-  const libbiIsCtrl = libbiIsBat_ac && pr[0] === "libbi";
+  const libbiIsCtrl = libbiIsBat_ac && pr[0] === coupledDeviceName;
   let gridDestXs = gridToHarvi && leftHarvi ? [leftHarvi.cx] : gridLandXs;
   let gridDestY  = gridToHarvi && leftHarvi ? leftHarvi.topY : ctrlTopY;
   if (libbiIsCtrl) { gridDestXs = [acBatCX]; gridDestY = acBatTopY + Math.round(libbiImgH * 0.6); }
@@ -447,11 +456,13 @@ export function Diagram({ config }) {
               <image href={DEVICE_REGISTRY.zappi.icon} x={d.x-devW/2} y={d.y} width={devW*2} height={zappiH}
                 preserveAspectRatio="xMidYMid meet" clipPath={`url(#zappi-clip-${i})`}/>
             </>
-          ) : (
+          ) : DEVICE_REGISTRY[d.name]?.icon ? (
             <>
               <rect x={d.cx-devWOf(d.name)/2} y={d.y} width={devWOf(d.name)} height={devHOf(d.name)} fill={DARK}/>
-              <image href={DEVICE_REGISTRY[d.name]?.icon} x={d.cx-devWOf(d.name)/2} y={d.y} width={devWOf(d.name)} height={devHOf(d.name)} preserveAspectRatio="xMidYMid meet"/>
+              <image href={DEVICE_REGISTRY[d.name].icon} x={d.cx-devWOf(d.name)/2} y={d.y} width={devWOf(d.name)} height={devHOf(d.name)} preserveAspectRatio="xMidYMid meet"/>
             </>
+          ) : (
+            <Blk x={d.cx-devWOf(d.name)/2} y={d.y} w={devWOf(d.name)} h={devHOf(d.name)} label={DEVICE_REGISTRY[d.name]?.label || d.name} bc="#777" lc={WHITE}/>
           )}
         </g>
       ))}
@@ -527,6 +538,55 @@ export function Diagram({ config }) {
         );
       })()}
 
+      {/* libbi 2's dedicated controller (+ optional CSIP-AUS controller) — two
+          small satellites hanging left of the libbi 2 battery box, in the
+          open gap between it and the switchboard. Below/right were both
+          ruled out empirically (screenshot review): below collides with the
+          inverter row when solar is also present, and there's little room
+          to the right before the diagram edge. This is a third topology
+          distinct from computeSatelliteAttachment's two styles (multiple
+          children stacked beside a parent, not above/below it), so it's
+          bespoke rather than forced through a primitive built for a
+          different case. */}
+      {hasACBat && ab[0]?.label === "myenergi libbi 2" && (() => {
+        const satW = 50, satH = 38, satGap = 14, dropGap = 26;
+        const parentX = acBatCX - acBatW/2, parentY = acBatTopY + acBatH/2;
+        const jogX = parentX - dropGap;
+        const acBatHarvi = rightHarvis.find(h => h.isAcBat);
+        const destX = use1phHarvi ? leftHarvi?.cx : acBatHarvi ? acBatHarvi.cx : solarLandXs[solarLandXs.length-1];
+        const destY = use1phHarvi ? leftHarvi?.topY : acBatHarvi ? acBatHarvi.topY : ctrlTopY;
+        const sats = [
+          { name: "libbiController", hasCt: true },
+          ...(csipRequired ? [{ name: "csipController", hasCt: false }] : []),
+        ];
+        const totalH = sats.length * satH + (sats.length - 1) * satGap;
+        const startY = parentY - totalH / 2;
+        return (
+          <>
+            <line x1={parentX} y1={parentY} x2={jogX} y2={parentY} stroke={WHITE} strokeWidth={2}/>
+            {sats.map((s, i) => {
+              const boxY = startY + i * (satH + satGap);
+              const cy = boxY + satH / 2;
+              const boxX = jogX - 14 - satW;
+              const spec = DEVICE_REGISTRY[s.name];
+              return (
+                <g key={s.name}>
+                  <line x1={jogX} y1={parentY} x2={jogX} y2={cy} stroke={WHITE} strokeWidth={2}/>
+                  <line x1={jogX} y1={cy} x2={jogX-14} y2={cy} stroke={WHITE} strokeWidth={2}/>
+                  <Blk x={boxX} y={boxY} w={satW} h={satH} label={spec?.label || s.name} bc="#777" lc={WHITE}/>
+                  {s.hasCt && (
+                    <>
+                      <CT x={boxX-14} y={cy} label="Ctrl CT"/>
+                      <Curve x1={boxX-19} y1={cy+8} x2={destX} y2={destY} dashed={true} sw={1.3}/>
+                    </>
+                  )}
+                </g>
+              );
+            })}
+          </>
+        );
+      })()}
+
       {/* Solar branch */}
       {hasSolar && (
         <>
@@ -554,7 +614,11 @@ export function Diagram({ config }) {
                 )}
                 {!v.ms && <InvWire x1={ctX} y1={cy} x2={invLeftX} y2={cy} v={v}/>}
                 {isDcLibbi ? (
-                  <image href={DEVICE_REGISTRY.libbi.icon} x={invCX-libbiDcW/2} y={cy-libbiDcH/2} width={libbiDcW} height={libbiDcH} preserveAspectRatio="xMidYMid meet"/>
+                  DEVICE_REGISTRY[coupledDeviceName]?.icon ? (
+                    <image href={DEVICE_REGISTRY[coupledDeviceName].icon} x={invCX-libbiDcW/2} y={cy-libbiDcH/2} width={libbiDcW} height={libbiDcH} preserveAspectRatio="xMidYMid meet"/>
+                  ) : (
+                    <Blk x={invCX-libbiDcW/2} y={cy-libbiDcH/2} w={libbiDcW} h={libbiDcH} label={DEVICE_REGISTRY[coupledDeviceName]?.label || coupledDeviceName} bc="#777" lc={WHITE}/>
+                  )
                 ) : (
                   <>
                     {(() => {

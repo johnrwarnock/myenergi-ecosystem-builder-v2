@@ -16,10 +16,19 @@ import gloImgUrl      from "../GLO.svg";
  *
  * @typedef {Object} DeviceSpec
  * @property {string} label
- * @property {string} icon - image URL
- * @property {'trunk'} role - the only role existing devices use; satellites
- *   (harvi, AC/DC batteries) aren't registry-driven yet — that's step 4/5.
+ * @property {string|null} icon - image URL, or null to fall back to a
+ *   generic labeled box (used for libbi 2's satellites, which don't have
+ *   final artwork yet — ships functionally correct, swap in an icon later)
+ * @property {'trunk'|'satellite'} role - trunk devices sit in the main
+ *   controller/secondary row; satellites attach to a parent (harvi is the
+ *   only registry-driven satellite so far — AC/DC battery attachment isn't
+ *   registry-driven yet, see src/diagram/layout/satellite.js)
  * @property {number} scale - multiplier applied to the base device box size
+ * @property {{ac:boolean, dc:boolean}} [couples] - marks a device that can
+ *   act as either an AC-coupled standalone battery or a DC-hybrid inverter
+ *   sub-battery (libbi, libbi2) — Diagram() uses this instead of hardcoded
+ *   name checks to decide whether the device appears as its own trunk box
+ *   or via the battery representation it's coupled to
  */
 
 /** @type {Record<string, DeviceSpec>} */
@@ -28,6 +37,9 @@ export const DEVICE_REGISTRY = {
   eddi:    { label: "eddi",    icon: eddiImgUrl,      role: "trunk", scale: 1.5 },
   "eddi+": { label: "eddi+",   icon: eddiPlusImgUrl,  role: "trunk", scale: 1.5 },
   GLO:     { label: "GLO",     icon: gloImgUrl,       role: "trunk", scale: 2 },
-  libbi:   { label: "libbi",   icon: libbiImgUrl,     role: "trunk", scale: 2.25 },
+  libbi:   { label: "libbi",   icon: libbiImgUrl,     role: "trunk", scale: 2.25, couples: { ac: true, dc: true } },
+  libbi2:  { label: "libbi 2", icon: null,            role: "trunk", scale: 2.25, couples: { ac: true, dc: true } },
   harvi:   { label: "harvi",   icon: harviImgUrl,     role: "satellite", scale: 1 },
+  libbiController: { label: "LIBBI CTRL", icon: null, role: "satellite", scale: 1 },
+  csipController:  { label: "CSIP CTRL",  icon: null, role: "satellite", scale: 1 },
 };
