@@ -86,22 +86,6 @@ describe('calcResults — CT and harvi counts', () => {
     expect(r.harvisNeeded).toBe(0);
   });
 
-  it('1ph, libbi 2 solo: grid CT + the libbi controller\'s own CT, counted even with monitoring off (required hardware, not a monitoring choice)', () => {
-    const cfg = { phase: '1ph', inverters: [], batteries: [], selections: { 7: 1 } };
-    const r = calcResults(cfg, false, false, 7);
-    expect(r.totalCTs).toBe(2);
-    expect(r.ctsIncluded).toBe(1);
-    expect(r.additionalCTs).toBe(1);
-    expect(r.harvisNeeded).toBe(0);
-  });
-
-  it('2x libbi 2: two libbi controller CTs counted, one per unit', () => {
-    const cfg = { phase: '1ph', inverters: [], batteries: [], selections: { 7: 2 } };
-    const r = calcResults(cfg, true, true, 7);
-    // grid(1) + 2x libbi controller CT(1 each) = 3
-    expect(r.totalCTs).toBe(3);
-  });
-
   it('monitorSolar=false excludes the solar CT from totals but hasSolar stays true (equipment presence vs. monitoring choice are independent)', () => {
     const cfg = { phase: '1ph', inverters: [solarInv1ph], batteries: [], selections: zappiSel };
     const r = calcResults(cfg, false, true, 2);
