@@ -3,6 +3,9 @@ import mainSbImgUrl from "./main switchboard.svg";
 import gridImgUrl   from "./grid.svg";
 import { computeSecondaryRow, computeViewBox, computeMainSwitchFork, computeSatelliteAttachment } from "./diagram/layout/index.js";
 import { DEVICE_REGISTRY } from "./diagram/deviceRegistry.js";
+import { Libbi2InstallDiagram } from "./diagram/Libbi2InstallDiagram.jsx";
+import { conductorColours } from "./libbi2.js";
+import { SolarPanel } from "./diagram/SolarPanel.jsx";
 
 const G     = "#40ff7a";   // myenergi green (borders)
 const G_TXT = "#1a6b35";   // dark green text (readable on white diagram bg)
@@ -21,15 +24,19 @@ const CONFIGS = {
   "1ph · AC battery":   { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}],  ab:[{mb:true}], wl:false, pr:["zappi"] },
   "1ph · wireless":     { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}],  ab:[],          wl:true,  pr:["zappi"] },
   "3ph · solar":        { sp:"3ph", inv:[{ph:"3ph",dc:false,db:false,ms:true}],  ab:[],          wl:false, pr:["zappi"] },
+  "3ph · solar (GB/EU)": { sp:"3ph", inv:[{ph:"3ph",dc:false,db:false,ms:true}],  ab:[],          wl:false, pr:["zappi"], region:"gbeu" },
+  "1ph · libbi 2 DC (GB/EU)": { sp:"1ph", inv:[], ab:[], wl:false, pr:["libbi 2","zappi"], region:"gbeu", libbiPv:true },
   "3ph · wireless":     { sp:"3ph", inv:[{ph:"3ph",dc:false,db:false,ms:true}],  ab:[],          wl:true,  pr:["zappi"] },
-  "3ph · 1ph device":  { sp:"3ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}],  ab:[],          wl:true,  pr:["zappi"] },
+  "3ph · 1ph device":  { sp:"3ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}],  ab:[],          wl:true,  pr:["zappi"], threePhaseDevices:[] },
   "2×1ph no wireless":  { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true},{ph:"1ph",dc:false,db:false,ms:true}], ab:[], wl:false, pr:["zappi"] },
   "2×1ph wireless":     { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true},{ph:"1ph",dc:false,db:false,ms:true}], ab:[], wl:true,  pr:["zappi"] },
   "3ph+1ph mix":        { sp:"3ph", inv:[{ph:"3ph",dc:true,db:true,ms:true},{ph:"1ph",dc:false,db:false,ms:true}],  ab:[], wl:false, pr:["zappi"] },
-  "multi-dev ×3":       { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}],  ab:[],          wl:false, pr:["zappi","eddi","libbi"] },
-  "full mix":           { sp:"3ph", inv:[{ph:"3ph",dc:true,db:true,ms:true},{ph:"1ph",dc:false,db:false,ms:true}], ab:[], wl:false, pr:["zappi","eddi","libbi"] },
-  "1ph · libbi AC":  { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}], ab:[{mb:false}], wl:false, pr:["zappi","libbi"] },
-  "1ph · libbi DC":  { sp:"1ph", inv:[{ph:"1ph",dc:true, db:true, ms:true}], ab:[],           wl:false, pr:["zappi","libbi"] },
+  "multi-dev ×3":       { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}],  ab:[],          wl:false, pr:["zappi","eddi","libbi 2"] },
+  "full mix":           { sp:"3ph", inv:[{ph:"3ph",dc:true,db:true,ms:true},{ph:"1ph",dc:false,db:false,ms:true}], ab:[], wl:false, pr:["zappi","eddi","libbi 2"] },
+  "1ph · libbi 2 AC":        { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}], ab:[], wl:false, pr:["libbi 2","zappi"] },
+  "1ph · libbi 2 DC":        { sp:"1ph", inv:[], ab:[], wl:false, pr:["libbi 2","zappi"], libbiPv:true },
+  "1ph · libbi 2 hybrid":    { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true,label:"Fronius"}], ab:[], wl:false, pr:["libbi 2","zappi"], libbiPv:true },
+  "3ph · libbi 2 DC":        { sp:"3ph", inv:[], ab:[], wl:false, pr:["libbi 2"], libbiPv:true },
   "1ph · main switch split": { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}], ab:[{mb:true}], wl:false, pr:["zappi"], mainSwitchSplit:true },
   "GLO solo":                { sp:"1ph", inv:[], ab:[], wl:false, pr:["GLO"] },
   "GLO + solar (hardwired)": { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}], ab:[], wl:false, pr:["GLO"] },
@@ -41,14 +48,39 @@ const CONFIGS = {
   "3ph · main switch split (DC hybrid)": { sp:"3ph", inv:[{ph:"3ph",dc:true,db:true,ms:true}], ab:[], wl:false, pr:["zappi"], mainSwitchSplit:true },
   "3ph · main switch split + AC battery": { sp:"3ph", inv:[{ph:"3ph",dc:false,db:false,ms:true}], ab:[{mb:true}], wl:false, pr:["zappi"], mainSwitchSplit:true },
   "1ph · main switch split, battery only": { sp:"1ph", inv:[], ab:[{mb:true}], wl:false, pr:["zappi"], mainSwitchSplit:true },
-  "1ph · main switch split + multi device": { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}], ab:[{mb:true}], wl:false, pr:["zappi","eddi","libbi"], mainSwitchSplit:true },
+  "1ph · main switch split + multi device": { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}], ab:[{mb:true}], wl:false, pr:["zappi","eddi","libbi 2"], mainSwitchSplit:true },
   "2ph · main switch split + battery": { sp:"2ph", inv:[{ph:"2ph",dc:false,db:false,ms:true}], ab:[{mb:true}], wl:false, pr:["zappi"], mainSwitchSplit:true },
-  "multi-dev ×5 (max)":      { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}], ab:[], wl:false, pr:["zappi","eddi","eddi+","GLO","libbi"] },
+  "multi-dev ×5 (max)":      { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}], ab:[], wl:false, pr:["zappi","eddi","eddi+","GLO","libbi 2"] },
   "GLO as secondary":        { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}], ab:[], wl:false, pr:["zappi","GLO"] },
   "2× zappi":                { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}], ab:[], wl:false, pr:["zappi","zappi"] },
   "3× zappi + eddi":         { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}], ab:[], wl:false, pr:["zappi","zappi","zappi","eddi"] },
   "2× GLO":                  { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}], ab:[], wl:false, pr:["zappi","GLO","GLO"] },
+  "3ph · zappi + eddi + libbi 2": { sp:"3ph", inv:[{ph:"3ph",dc:false,db:false,ms:true}], ab:[], wl:false, pr:["libbi 2","zappi","eddi"], libbiPv:true },
+  "1ph · eddi gateway + zappi + libbi 2 split": { sp:"1ph", inv:[{ph:"1ph",dc:false,db:false,ms:true}], ab:[], wl:false, pr:["eddi","zappi","libbi 2"], mainSwitchSplit:true, appliancesList:[{device:"eddi",app1:"hot-water",app2:"underfloor"}] },
+  "3ph · zappi + eddi + GLO":     { sp:"3ph", inv:[{ph:"3ph",dc:false,db:false,ms:true}], ab:[], wl:false, pr:["zappi","eddi","GLO"] },
 };
+
+// libbi 2 installation schematics — same demo picker, rendered with
+// Libbi2InstallDiagram so the visual overlap suite covers them too.
+const INSTALL_CONFIGS = {
+  "libbi 2 install · DC, no EPS":            { libbi2:{ inverterId:"HS5", modules:2, coupling:"dc", eps:false }, region:"aunz" },
+  "libbi 2 install · DC, EPS, 8 modules":    { libbi2:{ inverterId:"HS5", modules:8, coupling:"dc", eps:true }, region:"aunz", backupCircuits:["Lights","Refrigeration","Communications","Security","Essential sockets","Other essential load"] },
+  "libbi 2 install · AC + inverter, EPS":    { libbi2:{ inverterId:"HS3.6", modules:1, coupling:"ac", eps:true }, region:"aunz", hasThirdPartyPv:true, backupCircuits:["Lights"] },
+  "libbi 2 install · DC + inverter, GB/EU":   { libbi2:{ inverterId:"HS5", modules:4, coupling:"dc", eps:true }, region:"gbeu", hasThirdPartyPv:true, backupCircuits:["Lights","Refrigeration"] },
+  "libbi 2 install · 3ph, AC + inverter":    { libbi2:{ inverterId:"HS5", modules:3, coupling:"ac", eps:false }, region:"aunz", sitePhase:"3ph", hasThirdPartyPv:true },
+  "libbi 2 install · 12 kW (TBC), DC, EPS":  { libbi2:{ inverterId:"HS12", modules:6, coupling:"dc", eps:true }, region:"aunz", backupCircuits:["Lights","Security"] },
+  "libbi 2 install · 3ph GB/EU, DC, EPS":    { libbi2:{ inverterId:"HS5", modules:2, coupling:"dc", eps:true }, region:"gbeu", sitePhase:"3ph", backupCircuits:["Lights"] },
+};
+
+const DC_COL = "#d97706"; // PV / battery DC runs
+
+// Power conductor. White (AU L2) gets a grey casing so it reads on the white page.
+const Ln = ({ x1, y1, x2, y2, col, w }) => (
+  <>
+    {col.toLowerCase() === "#ffffff" && <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#888" strokeWidth={w + 1.6}/>}
+    <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={col} strokeWidth={w}/>
+  </>
+);
 
 const CT = ({ x, y, label }) => (
   <g>
@@ -67,9 +99,9 @@ const Blk = ({ x, y, w=80, h=36, label, sub, bc=WHITE, lc=WHITE, bg=BOX_BG, labe
   </g>
 );
 
-const BatIcon = ({ x, y, w=50, h=38, label="BATTERY" }) => (
+const BatIcon = ({ x, y, w=50, h=38, label="BATTERY", stroke="#666", dashed=false }) => (
   <g>
-    <rect x={x} y={y} width={w} height={h} rx={3} fill={BOX_BG} stroke="#666" strokeWidth={1.5}/>
+    <rect x={x} y={y} width={w} height={h} rx={3} fill={BOX_BG} stroke={stroke} strokeWidth={1.5} strokeDasharray={dashed ? "5 3" : undefined}/>
     <line x1={x} y1={y+h*0.35} x2={x+w} y2={y+h*0.35} stroke="#bbb" strokeWidth={0.8}/>
     <line x1={x} y1={y+h*0.68} x2={x+w} y2={y+h*0.68} stroke="#bbb" strokeWidth={0.8}/>
     <rect x={x+w*0.32} y={y+h*0.74} width={w*0.36} height={h*0.18} rx={2} fill="none" stroke="#aaa" strokeWidth={1}/>
@@ -146,12 +178,17 @@ const ApplianceIcon = ({ x, y, type, label }) => {
 };
 
 export function Diagram({ config }) {
-  const { sp, inv, ab, wl, pr, appliancesList = [], mainSwitchSplit = false, ctrlCtsSupported = 3 } = config;
-  const hasLibbi      = pr.includes("libbi");
-  const libbiIsBat_dc = hasLibbi && inv.some(v=>v.dc&&v.db);
-  const libbiIsBat_ac = hasLibbi && ab.length > 0;
-  const libbiImgW=44, libbiImgH=80;
-  const libbiDcW=55, libbiDcH=100; // DC hybrid replacement — 25% larger than AC battery libbi
+  const { sp, inv, ab, wl, pr, appliancesList = [], mainSwitchSplit = false, ctrlCtsSupported = 3, region = "aunz", libbiPv = false } = config;
+  // Devices wired across all three phases (zappi on a 3-phase supply, unless wired single phase)
+  const threePhaseDevices = config.threePhaseDevices ?? (sp === "3ph" ? ["zappi"] : []);
+  // Region conductor colours: single lines are drawn as L1, multi-phase runs as L1/L2/L3
+  const cc = conductorColours(region), LC = cc.L[0];
+  // libbi 2 appears twice: its controller is a trunk device (pr), and its
+  // inverter + battery stack is flagged isLibbi on the solar row (DC coupled)
+  // or as the AC battery (AC coupled). Third-party hybrids are never drawn as libbi.
+  // libbi 2 artwork is 120×290 (inverter on three true-proportion modules)
+  const libbiImgW=34, libbiImgH=82;
+  const libbiDcW=50, libbiDcH=121; // DC-coupled stack — larger than the AC-coupled stack
   const is2ph = sp === "2ph";
   const is3ph = sp === "3ph";
   const isMultiPh = is2ph || is3ph;
@@ -160,7 +197,7 @@ export function Diagram({ config }) {
   const siteXOs = is3ph ? [-5,0,5] : is2ph ? [-2.5, 2.5] : [0];
   const hasSolar   = inv.length > 0;
   const hasACBat   = ab.length > 0;
-  const hasAnyBat  = hasACBat || inv.some(v => v.dc);
+  const hasAnyBat  = hasACBat || inv.some(v => v.dc) || pr.includes("libbi 2");
   const showMainSwitch = mainSwitchSplit && hasAnyBat;
   const multiInv   = inv.length > 1;
   const iIs3 = v => v.ph==="3ph"||v.ph==="2ph";
@@ -202,7 +239,7 @@ export function Diagram({ config }) {
   inv.forEach((v,i) => {
     if (i===0) { invCYs.push(busY); return; }
     let bottom;
-    if (libbiIsBat_dc && inv[i-1].dc && inv[i-1].db) {
+    if (inv[i-1].isLibbi) {
       bottom = invCYs[i-1] + libbiDcH/2; // libbi centred at cy, bottom extent = libbiDcH/2
     } else {
       bottom = invCYs[i-1]+invH/2;
@@ -215,7 +252,7 @@ export function Diagram({ config }) {
   let rightBottom = busY+boardH/2;
   inv.forEach((v,i) => {
     let b;
-    if (libbiIsBat_dc && v.dc && v.db) {
+    if (v.isLibbi) {
       b = invCYs[i] + libbiDcH/2;
     } else {
       b = invCYs[i]+invH/2;
@@ -234,99 +271,144 @@ export function Diagram({ config }) {
   // CT X = midpoint between boardX+boardW and solarCtPos
   const acBatCtX  = Math.round((boardX+boardW + solarCtPos) / 2); // 401
 
-  // ── Controller top Y ─────────────────────────────────────
+  // ── Device row ──────────────────────────────────────────
+  // All myenergi devices sit in one row below the switchboard: the gateway
+  // (the device the CTs report to) on the left, secondaries to its right,
+  // with the WiFi link drawn between them. libbi 2 is one slot: its
+  // controller with the inverter/battery stack beside it.
   const extraGap = (!isMultiPh && hasSolar && hasACBat) ? Math.round(baseGap*0.5) : 0;
   const minCtrlTopY = busY + boardH/2 + 122; // 322 — matches 3ph-solar gap
-  let ctrlTopY = Math.max(rightBottom + baseGap + extraGap, minCtrlTopY);
-  const devList = libbiIsBat_dc || libbiIsBat_ac ? pr.filter(n=>n!=="libbi") : pr;
-  const ctrlX = boardCX-devW/2;
-  const ctrlCX = boardCX;
+  const ctrlTopY = Math.max(rightBottom + baseGap + extraGap, minCtrlTopY);
+  const rowY = ctrlTopY;
+  const devList = pr;
+  const ICON = { zappi: [52, 80], "eddi": [50, 60], "eddi+": [49, 64], GLO: [36, 70] };
+  const lcW = 38, lcH = 48, stkW = 45, stkH = 110, lbGap = 10; // libbi 2 controller + stack
+  const APP_W = 44, APP_GAP = 10;
+  let eddiSeen = 0;
+  const slots = devList.map((name, i) => {
+    if (name === "libbi 2") return { name, w: lcW + lbGap + stkW, h: stkH, isCtrl: i === 0 };
+    const [w, h] = ICON[name] || [50, 60];
+    let apps = [];
+    if (name === "eddi" || name === "eddi+") { const e = appliancesList[eddiSeen++] || {}; apps = [e.app1, e.app2].filter(Boolean); }
+    const appsW = apps.length ? apps.length * APP_W + (apps.length - 1) * APP_GAP : 0;
+    return { name, w, h, apps, slotW: Math.max(w, appsW), isCtrl: i === 0 };
+  });
+  const mainSwitchXPre = computeMainSwitchFork({ meterX, meterW, boardX, boardCX, busY, boardH, showMainSwitch }).mainSwitchX;
+  const gwLeft = showMainSwitch ? Math.max(boardX - 50, mainSwitchXPre + 34) : boardX - 50;
+  let cursor = gwLeft;
+  const devPositions = slots.map((sl, i) => {
+    const slotW = sl.slotW || sl.w;
+    const cx = cursor + slotW / 2;
+    cursor += slotW + (i === 0 ? 64 : 30);
+    const d = { ...sl, cx, x: cx - sl.w / 2, y: rowY };
+    if (sl.name === "libbi 2") {
+      d.lcX = d.x; d.lcCX = d.x + lcW / 2;
+      d.stkX = d.x + lcW + lbGap; d.stkCX = d.stkX + stkW / 2;
+      d.feedX = d.stkCX;            // supply lands on the inverter
+      d.landX = d.lcCX;             // CTs land on the controller
+    } else { d.feedX = cx; d.landX = cx; }
+    return d;
+  });
+  const gw = devPositions[0];
+  const gwRight = gw ? gw.x + gw.w : gwLeft;
+  const libbiPos = devPositions.find(d => d.name === "libbi 2");
+  const ctrlCX = gw ? gw.landX : boardCX;
+  const ctrlX = gw ? gw.x : boardCX;
 
-  let leftHarvi=null, rightHarvis=[];
-
-  if (use1phHarvi) {
-    // Single harvi left of zappi — finalised below once ctrlTopY is known
-    leftHarvi = { side:"left", forGrid:true, label:"harvi" };
-  } else {
-    if (gridToHarvi) {
-      leftHarvi = { side:"left", x:ctrlCX-harviW-22, cx:ctrlCX-harviW-22+harviW/2, forGrid:true };
-    }
-    if (solarToHarvi && inv.some(v=>v.ms)) {
-      const nSH = Math.ceil(solarCTcount/3);
-      for (let i=0;i<nSH;i++) {
-        const hx = ctrlCX+22 + i*(harviW+harviHGap);
-        rightHarvis.push({ side:"right", x:hx, cx:hx+harviW/2, forGrid:false, idx:i, isAcBat:false });
-      }
-    }
-    // AC battery needs its own dedicated harvi in multi-phase (cannot share with solar)
-    if (isMultiPh && hasACBat && ab[0]?.mb) {
-      const offset = rightHarvis.length;
-      const hx = ctrlCX+22 + offset*(harviW+harviHGap);
-      rightHarvis.push({ side:"right", x:hx, cx:hx+harviW/2, forGrid:false, isAcBat:true });
-    }
-    // Align all harvi bottom edges to controller top, then relabel
-    const allHarvisToAlign = [...(leftHarvi?[leftHarvi]:[]), ...rightHarvis];
-    allHarvisToAlign.forEach(h => { h.topY = ctrlTopY - harviH; h.bottomY = ctrlTopY; });
-    if (allHarvisToAlign.length === 1) { allHarvisToAlign[0].label = "harvi"; }
-    else { allHarvisToAlign.forEach((h, i) => { h.label = `harvi ${i+1}`; }); }
+  // harvis sit to the left of the gateway, nearest first: grid, solar, battery
+  const harvis = [];
+  if (gridToHarvi || use1phHarvi) harvis.push({ forGrid: true });
+  if (!use1phHarvi && solarToHarvi && inv.some(v => v.ms)) {
+    for (let i = 0; i < Math.ceil(solarCTcount / 3); i++) harvis.push({ forSolar: true, idx: i });
   }
+  if (!use1phHarvi && isMultiPh && hasACBat && ab[0]?.mb) harvis.push({ isAcBat: true });
+  harvis.forEach((h, i) => {
+    h.x = gwLeft - 30 - harviW - i * (harviW + 30);
+    h.cx = h.x + harviW / 2;
+    h.topY = rowY + 4; h.bottomY = h.topY + harviH;
+    h.label = harvis.length === 1 ? "harvi" : `harvi ${i + 1}`;
+  });
+  const leftHarvi = harvis.find(h => h.forGrid) || null;
+  const rightHarvis = harvis.filter(h => !h.forGrid);
+  const allHarvis = harvis;
 
-  const allHarvis = [...(leftHarvi&&!use1phHarvi?[leftHarvi]:[]), ...rightHarvis];
-
-  // Finalise 1ph harvi position (left of zappi, centred vertically between board and controller)
-  if (use1phHarvi) {
-    const harviTopY = Math.round((busY + boardH/2 + ctrlTopY) / 2 - harviH/2);
-    leftHarvi.x = ctrlX - harviW - 16;
-    leftHarvi.topY = harviTopY;
-    leftHarvi.cx = ctrlX - harviW - 16 + harviW/2;
-    leftHarvi.bottomY = harviTopY + harviH;
-  }
-
-  // ── CT landing zones ──────────────────────────────────────
-  const gridLandXs  = nSitePh===3 ? [ctrlCX-18,ctrlCX-10,ctrlCX-2] : nSitePh===2 ? [ctrlCX-13,ctrlCX-5] : [ctrlCX-8];
-  const solarLandXs = nSitePh===3 ? [ctrlCX+2, ctrlCX+10,ctrlCX+18] : nSitePh===2 ? [ctrlCX+5,ctrlCX+13] : [ctrlCX+8];
-
-  // When libbi is AC battery AND controller, grid CTs connect directly to libbi
-  const libbiIsCtrl = libbiIsBat_ac && pr[0] === "libbi";
-  let gridDestXs = gridToHarvi && leftHarvi ? [leftHarvi.cx] : gridLandXs;
-  let gridDestY  = gridToHarvi && leftHarvi ? leftHarvi.topY : ctrlTopY;
-  if (libbiIsCtrl) { gridDestXs = [acBatCX]; gridDestY = acBatTopY + Math.round(libbiImgH * 0.6); }
-
+  // ── CT landing zones (top of the gateway) ─────────────────
+  const landXs = (cx, side) => {
+    const base = side === "grid" ? -1 : 1;
+    const xs = nSitePh===3 ? [4, 9, 14] : nSitePh===2 ? [4, 9] : [5];
+    return xs.map(o => cx + base * o).sort((a, b) => a - b);
+  };
+  const gridLandXs  = landXs(ctrlCX, "grid");
+  const solarLandXs = landXs(ctrlCX, "solar");
+  const gridDestXs = gridToHarvi && leftHarvi ? [leftHarvi.cx] : gridLandXs;
+  const gridDestY  = gridToHarvi && leftHarvi ? leftHarvi.topY : rowY;
   const solarHarvis = rightHarvis.filter(h => !h.isAcBat);
   const solarDestFor = (i) => {
-    if (!solarToHarvi) return { xs:solarLandXs, y:ctrlTopY };
+    if (!solarToHarvi) return { xs:solarLandXs, y:rowY };
     if (use1phHarvi)   return { xs:[leftHarvi.cx], y:leftHarvi.topY };
     const h = solarHarvis[Math.min(i, solarHarvis.length-1)];
-    return h ? { xs:[h.cx], y:h.topY } : { xs:solarLandXs, y:ctrlTopY };
+    return h ? { xs:[h.cx], y:h.topY } : { xs:solarLandXs, y:rowY };
   };
-
-  // Wireless landing on controller
-  const harviLandXs = use1phHarvi
-    ? gridLandXs.concat(solarLandXs)
-    : (leftHarvi ? gridLandXs : solarLandXs);
-
-  // ── Device positions — controller centred, secondaries in horizontal row below ──
-  const zappiH = devHOf("zappi");
-  const ctrlEntry = { name: devList[0], isCtrl: true, x: ctrlX, cx: ctrlCX, y: ctrlTopY, boardExitCx: ctrlCX };
-  const secDevList = devList.slice(1);
-  let devPositions;
-  if (secDevList.length === 0) {
-    devPositions = [ctrlEntry];
-  } else {
-    const secRowY = ctrlTopY + devHOf(devList[0]) + devGap + secStep;
-    const secEntries = computeSecondaryRow({ ctrlCX, boardW, devW, secRowY, secDevList, devWOf });
-    devPositions = [ctrlEntry, ...secEntries];
-  }
 
   // ── Helpers ───────────────────────────────────────────────
   const { gridCtX, mainSwitchX, topY, propertyCtX, propDashY, bypassY } =
     computeMainSwitchFork({ meterX, meterW, boardX, boardCX, busY, boardH, showMainSwitch });
 
-  const SiteWire = ({x1,y1,x2,y2,color=WHITE}) => <>{siteOs.map((o,i)=>(
-    <line key={i} x1={x1} y1={y1+o} x2={x2} y2={y2+o} stroke={color} strokeWidth={isMultiPh?2.5:3}/>
+  // Orthogonal run drawn as one active (L1) or as L1/L2/L3 side by side.
+  // Each vertex moves in x only if it touches a vertical leg and in y only if
+  // it touches a horizontal leg, so straight runs keep their end points and
+  // corners stay square.
+  const PhaseRun = ({ pts, n = 1, w = 2.5 }) => {
+    const offs = n === 3 ? [-phSp, 0, phSp] : n === 2 ? [-phSp/2, phSp/2] : [0];
+    const isV = (a, b) => a && b && a[0] === b[0];
+    const isH = (a, b) => a && b && a[1] === b[1];
+    return <>{offs.map((o, i) => {
+      const d = pts.map((p, k) => {
+        const prev = pts[k - 1], next = pts[k + 1];
+        const dx = isV(prev, p) || isV(p, next) ? o : 0;
+        const dy = isH(prev, p) || isH(p, next) ? o : 0;
+        return `${p[0] + dx},${p[1] + dy}`;
+      }).join(" ");
+      const col = n > 1 ? cc.L[i] : LC;
+      return (
+        <g key={i}>
+          {col.toLowerCase() === "#ffffff" && <polyline points={d} fill="none" stroke="#888" strokeWidth={w + 1.6}/>}
+          <polyline points={d} fill="none" stroke={col} strokeWidth={w}/>
+        </g>
+      );
+    })}</>;
+  };
+  const devPh = name => (is3ph && threePhaseDevices.includes(name) ? 3 : 1);
+
+  // ── Device circuits: each leaves the board bottom in row order and jogs
+  // across at its own level. Devices further out jog higher, so no two
+  // circuits cross or overlap.
+  const bypassYPre = computeMainSwitchFork({ meterX, meterW, boardX, boardCX, busY, boardH, showMainSwitch }).bypassY;
+  const drops = (() => {
+    const n = devPositions.length;
+    if (!n) return [];
+    const widths = devPositions.map(d => (devPh(d.name) > 1 ? 2 * phSp + 14 : 14));
+    const total = widths.reduce((a, b) => a + b, 0);
+    let x = boardCX - total / 2;
+    const exits = widths.map(w => { const e = x + w / 2; x += w; return e; });
+    const out = devPositions.map((d, i) => ({ d, exit: exits[i], left: d.feedX < exits[i] }));
+    const lefts = out.filter(o => o.left).sort((a, b) => a.d.feedX - b.d.feedX);       // furthest left first
+    const rights = out.filter(o => !o.left).sort((a, b) => b.d.feedX - a.d.feedX);     // furthest right first
+    const boardBot = busY + boardH / 2;
+    [lefts, rights].forEach(group => group.forEach((o, rank) => { o.jog = boardBot + 14 + rank * 15; }));
+    // via the main switch: all run right from the switch, furthest highest
+    [...out].sort((a, b) => b.d.feedX - a.d.feedX).forEach((o, rank) => { o.byp = bypassYPre + rank * 15; });
+    return out;
+  })();
+
+  // Solar side of the board only carries as many actives as the widest inverter
+  const solarPh = inv.some(v => iIs3(v)) ? nSitePh : 1;
+
+  const SiteWire = ({x1,y1,x2,y2}) => <>{siteOs.map((o,i)=>(
+    <Ln key={i} x1={x1} y1={y1+o} x2={x2} y2={y2+o} col={isMultiPh ? cc.L[i] : LC} w={isMultiPh?2.5:3}/>
   ))}</>;
   const InvWire = ({x1,y1,x2,y2,v}) => <>{iOs(v).map((o,i)=>(
-    <line key={i} x1={x1} y1={y1+o} x2={x2} y2={y2+o} stroke={WHITE} strokeWidth={iIs3(v)?2.5:3}/>
+    <Ln key={i} x1={x1} y1={y1+o} x2={x2} y2={y2+o} col={iIs3(v) ? cc.L[i] : LC} w={iIs3(v)?2.5:3}/>
   ))}</>;
   const SiteCTs = ({x,y,label}) => <>{siteOs.map((o,i)=>(
     <CT key={i} x={x+siteXOs[i]} y={y+o} label={i===0?label:""}/>
@@ -339,9 +421,13 @@ export function Diagram({ config }) {
     return <Curve key={i} x1={ctX+xsArr[i]} y1={ctY+o+8} x2={dx} y2={dy} dashed={true} sw={1.3}/>;
   })}</>;
 
-  const bottomAll = Math.max(...devPositions.map(d=>d.y+devHOf(d.name)));
-  const VHbase = bottomAll+60; // extra padding so secondary devices are never clipped
-  const { VXeff, VWeff, VH } = computeViewBox({ devPositions, devW, devWOf, VX, VW, VH: VHbase });
+  const appH = 32;
+  const devBottom = d => d.y + d.h + (d.apps?.length ? 18 + appH + 14 : 0) + (d.name === "libbi 2" ? (libbiPv ? 22 + pvH + 16 : 14) : 0);
+  const bottomAll = Math.max(rightBottom, ...devPositions.map(devBottom));
+  const VH = bottomAll + 40;
+  const minX = Math.min(VX, ...harvis.map(h => h.x - 12), ...devPositions.map(d => d.cx - (d.slotW || d.w) / 2 - 12));
+  const maxX = Math.max(VX + VW, ...devPositions.map(d => d.cx + (d.slotW || d.w) / 2 + 12));
+  const VXeff = minX, VWeff = maxX - minX;
 
   return (
     <svg width="100%" viewBox={`${VXeff} 0 ${VWeff} ${VH}`} style={{background:DARK,borderRadius:8,display:"block"}}>
@@ -364,45 +450,35 @@ export function Diagram({ config }) {
       <text x={boardCX} y={busY-boardH/2-10} textAnchor="middle" fill={WHITE} fontSize={8} fontWeight="700" fontFamily="Overpass,sans-serif">MAIN SWITCHBOARD</text>
       <image href={mainSbImgUrl} x={boardX} y={busY-boardH/2} width={boardW} height={boardH} preserveAspectRatio="none"/>
 
-      {/* Individual circuit lines — straight for the controller (and for any device whose
-          real position matches its board-exit point); a short jog for secondaries whose
-          width-aware spacing has shifted them away from their evenly-spaced exit point. */}
-      {devPositions.map((d, i) => {
-        const topY = showMainSwitch ? bypassY : busY + boardH/2;
-        if (showMainSwitch || d.cx === d.boardExitCx) {
-          return <line key={i} x1={d.cx} y1={topY} x2={d.cx} y2={d.y} stroke={WHITE} strokeWidth={d.isCtrl ? 3 : 2.5}/>;
-        }
-        const jogY = d.y - 18;
-        return (
-          <g key={i}>
-            <line x1={d.boardExitCx} y1={topY} x2={d.boardExitCx} y2={jogY} stroke={WHITE} strokeWidth={2.5}/>
-            <line x1={d.boardExitCx} y1={jogY} x2={d.cx} y2={jogY} stroke={WHITE} strokeWidth={2.5}/>
-            <line x1={d.cx} y1={jogY} x2={d.cx} y2={d.y} stroke={WHITE} strokeWidth={2.5}/>
-          </g>
-        );
+
+      {/* myenergi device circuits — one per device, each at its own jog level */}
+      {drops.map(({ d, exit, jog, byp }, i) => {
+        const n = devPh(d.name), w = n > 1 ? 2.2 : 2.5;
+        const pts = showMainSwitch
+          ? [[mainSwitchX, busY+7], [mainSwitchX, byp], [d.feedX, byp], [d.feedX, d.y]]
+          : Math.abs(exit - d.feedX) < 0.5
+            ? [[exit, busY + boardH/2], [exit, d.y]]
+            : [[exit, busY + boardH/2], [exit, jog], [d.feedX, jog], [d.feedX, d.y]];
+        return <PhaseRun key={i} pts={pts} n={n} w={w}/>;
       })}
 
       {/* Main switch — central fork: switchboard fed from the top, myenergi device fed from the bottom */}
       {showMainSwitch && (() => {
         const propTarget = hasSolar
           ? { x: invX, y: invCYs[0] }
-          : { x: acBatCX, y: acBatTopY + acBatH/2 };
+          : hasACBat ? { x: acBatCX, y: acBatTopY + acBatH/2 }
+          : { x: libbiPos ? libbiPos.lcCX : boardCX, y: libbiPos ? libbiPos.y : busY };
         return (
           <>
             {/* Switch body, centred on the incoming supply line */}
             <rect x={mainSwitchX-7} y={busY-7} width={14} height={14} rx={2} fill={BOX_BG} stroke={WHITE} strokeWidth={1.5}/>
 
             {/* Top branch → switchboard */}
-            <line x1={mainSwitchX} y1={busY-7} x2={mainSwitchX} y2={topY} stroke={WHITE} strokeWidth={2.5}/>
-            <line x1={mainSwitchX} y1={topY} x2={boardCX} y2={topY} stroke={WHITE} strokeWidth={2.5}/>
-            <line x1={boardCX} y1={topY} x2={boardCX} y2={busY-boardH/2} stroke={WHITE} strokeWidth={2.5}/>
+            <PhaseRun pts={[[mainSwitchX, busY-7], [mainSwitchX, topY], [boardCX, topY], [boardCX, busY-boardH/2]]} n={nSitePh} w={isMultiPh ? 2.2 : 2.5}/>
             <text x={mainSwitchX} y={busY-12} textAnchor="middle" fill={WHITE} fontSize={7.5} fontWeight="700" fontFamily="Overpass,sans-serif">MAIN SWITCH</text>
 
             {/* Bottom branch → myenergi device */}
-            <line x1={mainSwitchX} y1={busY+7} x2={mainSwitchX} y2={bypassY} stroke={WHITE} strokeWidth={2.5}/>
-            {devPositions.map((d,i) => (
-              <line key={`byp-${i}`} x1={mainSwitchX} y1={bypassY} x2={d.cx} y2={bypassY} stroke={WHITE} strokeWidth={d.isCtrl?3:2.5}/>
-            ))}
+            {/* (drawn with the device circuits above) */}
 
             {/* Property-side CT — on the switchboard branch, belongs to the inverter/battery, monitors the property load only */}
             <CT x={propertyCtX} y={topY} label="Property CT"/>
@@ -413,91 +489,70 @@ export function Diagram({ config }) {
         );
       })()}
 
-      {/* 1ph harvi — left of zappi */}
-      {use1phHarvi && leftHarvi && (
-        <>
-          <image href={DEVICE_REGISTRY.harvi.icon} x={leftHarvi.x} y={leftHarvi.topY} width={harviW} height={harviH} preserveAspectRatio="xMidYMid meet"/>
-          {/* WiFi centred on harvi bottom, 2px clear below box, waves pointing down toward zappi */}
-          <WiFi cx={leftHarvi.cx} cy={leftHarvi.bottomY + 12} rotate={180} color={WHITE}/>
-        </>
-      )}
+      {/* harvis — left of the gateway, each sending wirelessly to it */}
+      {allHarvis.map((h, hi) => (
+        <g key={hi}>
+          <image href={DEVICE_REGISTRY.harvi.icon} x={h.x} y={h.topY} width={harviW} height={harviH} preserveAspectRatio="xMidYMid meet"/>
+          <WiFi cx={h.x + harviW + 14} cy={h.topY + harviH / 2} rotate={90} color={WHITE} size={11}/>
+        </g>
+      ))}
 
-      {/* 3ph/multi harvis */}
-      {!use1phHarvi && allHarvis.map((h,hi)=>{
-        return (
-          <g key={hi}>
-            <image href={DEVICE_REGISTRY.harvi.icon} x={h.x} y={h.topY} width={harviW} height={harviH} preserveAspectRatio="xMidYMid meet"/>
-            {/* WiFi centred on harvi bottom, 2px clear below box, waves pointing down toward zappi */}
-            <WiFi cx={h.cx} cy={h.bottomY + 12} rotate={180} color={WHITE}/>
-          </g>
-        );
-      })}
-
-      {/* myenergi devices — controller + horizontal row of secondaries */}
-      {devPositions.map((d,i)=>(
+      {/* myenergi devices — gateway on the left, secondaries to the right */}
+      {devPositions.map((d, i) => (
         <g key={i}>
-          {d.name === "zappi" ? (
+          {d.name === "libbi 2" ? (
             <>
-              <defs>
-                <clipPath id={`zappi-clip-${i}`}>
-                  <rect x={d.x-devW/2} y={d.y} width={devW*2} height={zappiH} rx={4}/>
-                </clipPath>
-              </defs>
-              <rect x={d.x-devW/2} y={d.y} width={devW*2} height={zappiH} fill={DARK}/>
-              <image href={DEVICE_REGISTRY.zappi.icon} x={d.x-devW/2} y={d.y} width={devW*2} height={zappiH}
-                preserveAspectRatio="xMidYMid meet" clipPath={`url(#zappi-clip-${i})`}/>
+              <image href={DEVICE_REGISTRY["libbi 2"].icon} x={d.lcX} y={d.y} width={lcW} height={lcH} preserveAspectRatio="xMidYMid meet"/>
+              <line x1={d.lcX + lcW} y1={d.y + lcH / 2} x2={d.stkX} y2={d.y + lcH / 2} stroke={SIG} strokeWidth={1.3} strokeDasharray="4 3"/>
+              <image href={DEVICE_REGISTRY["libbi 2"].stackIcon} x={d.stkX} y={d.y} width={stkW} height={stkH} preserveAspectRatio="xMidYMid meet"/>
+              <text x={d.lcCX} y={d.y + lcH + 11} textAnchor="middle" fill={WHITE} fontSize={6.5} fontWeight="700" fontFamily="Overpass,sans-serif">CONTROLLER</text>
+              <text x={d.stkCX} y={d.y + stkH + 11} textAnchor="middle" fill={WHITE} fontSize={8} fontWeight="700" fontFamily="Overpass,sans-serif">LIBBI 2</text>
+              {libbiPv && (
+                <>
+                  <Ln x1={d.stkX + stkW} y1={d.y + stkH - 14} x2={d.stkX + stkW + 10} y2={d.y + stkH - 14} col={DC_COL} w={2.5}/>
+                  <Ln x1={d.stkX + stkW + 10} y1={d.y + stkH - 14} x2={d.stkX + stkW + 10} y2={d.y + stkH + 22} col={DC_COL} w={2.5}/>
+                  <SolarPanel x={d.stkCX - pvW / 2 + 6} y={d.y + stkH + 22} w={pvW} h={pvH}/>
+                  <text x={d.stkCX + 6} y={d.y + stkH + 22 + pvH + 12} textAnchor="middle" fill={WHITE} fontSize={8} fontWeight="700" fontFamily="Overpass,sans-serif">PV ARRAY</text>
+                </>
+              )}
             </>
           ) : (
             <>
-              <rect x={d.cx-devWOf(d.name)/2} y={d.y} width={devWOf(d.name)} height={devHOf(d.name)} fill={DARK}/>
-              <image href={DEVICE_REGISTRY[d.name]?.icon} x={d.cx-devWOf(d.name)/2} y={d.y} width={devWOf(d.name)} height={devHOf(d.name)} preserveAspectRatio="xMidYMid meet"/>
+              <rect x={d.x} y={d.y} width={d.w} height={d.h} fill={DARK}/>
+              <image href={DEVICE_REGISTRY[d.name]?.icon} x={d.x} y={d.y} width={d.w} height={d.h} preserveAspectRatio="xMidYMid meet"/>
             </>
           )}
         </g>
       ))}
 
-      {/* Single WiFi symbol below controller when secondaries exist */}
-      {secDevList.length > 0 && (
-        <WiFi cx={ctrlCX} cy={ctrlTopY + devHOf(devList[0]) + 14} rotate={180} color={WHITE} size={10}/>
+      {/* WiFi link between the gateway and its secondaries */}
+      {devPositions.length > 1 && (
+        <WiFi cx={gwRight + 30} cy={rowY + 26} rotate={90} color={WHITE} size={12}/>
       )}
 
-      {/* Eddi appliances — drawn to the left of each eddi/eddi+ device */}
-      {(() => {
+      {/* eddi appliances — below each eddi / eddi+ */}
+      {devPositions.map((d, di) => {
+        if (!d.apps?.length) return null;
         const APPLIANCE_LABELS = { "hot-water":"Hot Water", "underfloor":"Underfloor", "pool":"Pool/Spa", "radiator":"Radiator", "other":"Appliance" };
-        const appW = 44, appH = 32, appGap = 10;
-        let eddiIdx = 0;
-        return devPositions.map((d, di) => {
-          if (d.name !== "eddi" && d.name !== "eddi+") return null;
-          const entry = appliancesList[eddiIdx++] || {};
-          const apps = [entry.app1, entry.app2].filter(Boolean);
-          if (apps.length === 0) return null;
-          const devLeftX = d.cx - devWOf(d.name) / 2;
-          const startX = devLeftX - 16;
-          const totalH = apps.length * appH + (apps.length - 1) * appGap;
-          const devMidY = d.y + devHOf(d.name) / 2;
-          const firstY = devMidY - totalH / 2;
-          return (
-            <g key={`app-${di}`}>
-              {apps.map((app, ai) => {
-                const ay = firstY + ai * (appH + appGap);
-                const iconX = startX - appW - 8;
-                const connY = ay + appH / 2;
-                return (
-                  <g key={ai}>
-                    <line x1={startX} y1={connY} x2={iconX + appW} y2={connY} stroke={WHITE} strokeWidth={1.8}/>
-                    <ApplianceIcon x={iconX} y={ay} type={app} label={APPLIANCE_LABELS[app] || "Appliance"}/>
-                  </g>
-                );
-              })}
-              {/* Tap from device left edge to first appliance branch */}
-              <line x1={devLeftX} y1={devMidY} x2={startX} y2={devMidY} stroke={WHITE} strokeWidth={1.8}/>
-              {apps.length > 1 && (
-                <line x1={startX} y1={firstY + appH/2} x2={startX} y2={firstY + appH + appGap + appH/2} stroke={WHITE} strokeWidth={1.8}/>
-              )}
-            </g>
-          );
-        });
-      })()}
+        const total = d.apps.length * APP_W + (d.apps.length - 1) * APP_GAP;
+        const startX = d.cx - total / 2;
+        const busYa = d.y + d.h + 9, iconY = d.y + d.h + 18;
+        return (
+          <g key={`app-${di}`}>
+            <Ln x1={d.cx} y1={d.y + d.h} x2={d.cx} y2={busYa} col={LC} w={1.8}/>
+            {d.apps.length > 1 && <Ln x1={startX + APP_W / 2} y1={busYa} x2={startX + total - APP_W / 2} y2={busYa} col={LC} w={1.8}/>}
+            {d.apps.map((app, ai) => {
+              const ax = startX + ai * (APP_W + APP_GAP);
+              return (
+                <g key={ai}>
+                  <Ln x1={ax + APP_W / 2} y1={busYa} x2={ax + APP_W / 2} y2={iconY + 2} col={LC} w={1.8}/>
+                  <ApplianceIcon x={ax} y={iconY} type={app} label={APPLIANCE_LABELS[app] || "Appliance"}/>
+                </g>
+              );
+            })}
+          </g>
+        );
+      })}
 
       {/* AC Battery — rendered independently of solar so it appears even with no inverter */}
       {hasACBat && (() => {
@@ -505,7 +560,7 @@ export function Diagram({ config }) {
         const ct = ab[0]?.mb ? (() => {
           const acBatHarvi = rightHarvis.find(h => h.isAcBat);
           const destX = use1phHarvi ? leftHarvi?.cx : acBatHarvi ? acBatHarvi.cx : solarLandXs[solarLandXs.length-1];
-          const destY = use1phHarvi ? leftHarvi?.topY : acBatHarvi ? acBatHarvi.topY : ctrlTopY;
+          const destY = use1phHarvi ? leftHarvi?.topY : acBatHarvi ? acBatHarvi.topY : rowY;
           return { x: acBatCtX, y: acBatLineY, label: "Bat CT", dest: { x: destX, y: destY } };
         })() : null;
         const { wireSegments, ct: ctGeo } = computeSatelliteAttachment({
@@ -515,7 +570,7 @@ export function Diagram({ config }) {
           <>
             <BatIcon x={box.x} y={box.y} w={box.w} h={box.h} label={trunc(ab[0]?.label, 11) || "BATTERY"}/>
             {wireSegments.map((seg, i) => (
-              <line key={i} x1={seg.x1} y1={seg.y1} x2={seg.x2} y2={seg.y2} stroke={WHITE} strokeWidth={2.5}/>
+              <Ln key={i} x1={seg.x1} y1={seg.y1} x2={seg.x2} y2={seg.y2} col={LC} w={2.5}/>
             ))}
             {ctGeo && (
               <>
@@ -531,15 +586,15 @@ export function Diagram({ config }) {
       {hasSolar && (
         <>
           {/* Bus: board right → solarTapX */}
-          <SiteWire x1={boardX+boardW} y1={busY} x2={solarTapX} y2={busY}/>
-          {multiInv && <line x1={solarTapX} y1={busY} x2={solarTapX} y2={invCYs[inv.length-1]} stroke={WHITE} strokeWidth={2.5}/>}
+          <PhaseRun pts={[[boardX+boardW, busY], [solarTapX, busY]]} n={solarPh} w={solarPh > 1 ? 2.5 : 3}/>
+          {multiInv && <PhaseRun pts={[[solarTapX, busY], [solarTapX, invCYs[inv.length-1]]]} n={solarPh} w={2.5}/>}
 
           {inv.map((v,i)=>{
             const cy=invCYs[i];
             const ctX=invX-28;
             const lbl=v.dc?(iIs3(v)?"Gen+Bat CT×3":"Gen+Bat CT3"):(iIs3(v)?"Solar CT×3":(multiInv?`Solar CT${i+1}`:"Solar CT2"));
             const sd=solarDestFor(i);
-            const isDcLibbi = libbiIsBat_dc && v.dc && v.db;
+            const isDcLibbi = !!v.isLibbi;
             const invLeftX  = isDcLibbi ? invCX - libbiDcW/2 : invX;
             const invRightX = isDcLibbi ? invCX + libbiDcW/2 : invX+invW;
             return (
@@ -552,9 +607,12 @@ export function Diagram({ config }) {
                     <InvWire x1={ctX+6} y1={cy} x2={invLeftX} y2={cy} v={v}/>
                   </>
                 )}
-                {!v.ms && <InvWire x1={ctX} y1={cy} x2={invLeftX} y2={cy} v={v}/>}
+                {!v.ms && <InvWire x1={ctX-6} y1={cy} x2={invLeftX} y2={cy} v={v}/>}
                 {isDcLibbi ? (
-                  <image href={DEVICE_REGISTRY.libbi.icon} x={invCX-libbiDcW/2} y={cy-libbiDcH/2} width={libbiDcW} height={libbiDcH} preserveAspectRatio="xMidYMid meet"/>
+                  <>
+                    <image href={DEVICE_REGISTRY["libbi 2"].stackIcon} x={invCX-libbiDcW/2} y={cy-libbiDcH/2} width={libbiDcW} height={libbiDcH} preserveAspectRatio="xMidYMid meet"/>
+                    <text x={invCX} y={cy-libbiDcH/2-5} textAnchor="middle" fill={WHITE} fontSize={8} fontWeight="700" fontFamily="Overpass,sans-serif">LIBBI 2</text>
+                  </>
                 ) : (
                   <>
                     {(() => {
@@ -571,7 +629,7 @@ export function Diagram({ config }) {
                       return (
                         <>
                           {wireSegments.map((seg, i) => (
-                            <line key={i} x1={seg.x1} y1={seg.y1} x2={seg.x2} y2={seg.y2} stroke={WHITE} strokeWidth={2.5}/>
+                            <Ln key={i} x1={seg.x1} y1={seg.y1} x2={seg.x2} y2={seg.y2} col={DC_COL} w={2.5}/>
                           ))}
                           <BatIcon x={box.x} y={box.y} w={box.w} h={box.h} label={trunc(v.batLabel, 11) || "BATTERY"}/>
                         </>
@@ -579,12 +637,9 @@ export function Diagram({ config }) {
                     })()}
                   </>
                 )}
-                <line x1={invRightX} y1={cy} x2={pvX} y2={cy} stroke={WHITE} strokeWidth={2.5}/>
+                <Ln x1={invRightX} y1={cy} x2={pvX} y2={cy} col={DC_COL} w={2.5}/>
                 <g>
-                  <rect x={pvX} y={cy-pvH/2} width={pvW} height={pvH} rx={3} fill="#e8ede8" stroke="#666" strokeWidth={1.5}/>
-                  {[0,1,2].map(c=>[0,1].map(r=>(
-                    <rect key={`${c}${r}`} x={pvX+4+c*18} y={cy-pvH/2+5+r*15} width={13} height={11} rx={1} fill="none" stroke="#ccc" strokeWidth={1}/>
-                  )))}
+                  <SolarPanel x={pvX} y={cy-pvH/2} w={pvW} h={pvH}/>
                   <text x={pvX+pvW/2} y={cy+pvH/2+13} textAnchor="middle" fill={WHITE} fontSize={8} fontWeight="700" fontFamily="Overpass,sans-serif">
                     {multiInv?`PV ARRAY ${i+1}`:"PV ARRAY"}
                   </text>
@@ -605,11 +660,11 @@ export default function App() {
     <div style={{background:"#f0f0f0",minHeight:"100vh",fontFamily:"'Overpass',sans-serif",color:"#111",padding:20}}>
       <link href="https://fonts.googleapis.com/css2?family=Overpass:ital,wght@0,300;0,700;1,800&display=swap" rel="stylesheet"/>
       <div style={{marginBottom:14,display:"flex",gap:6,flexWrap:"wrap"}}>
-        {Object.keys(CONFIGS).map(k=>(
+        {[...Object.keys(CONFIGS), ...Object.keys(INSTALL_CONFIGS)].map(k=>(
           <button key={k} onClick={()=>setKey(k)} style={{background:k===key?G:"#1a1a1a",color:k===key?"#000":"#aaa",border:`1px solid ${k===key?G:"#333"}`,borderRadius:999,padding:"5px 12px",fontSize:10,cursor:"pointer",fontFamily:"inherit"}}>{k}</button>
         ))}
       </div>
-      <Diagram config={CONFIGS[key]}/>
+      {INSTALL_CONFIGS[key] ? <Libbi2InstallDiagram {...INSTALL_CONFIGS[key]}/> : <Diagram config={CONFIGS[key]}/>}
     </div>
   );
 }

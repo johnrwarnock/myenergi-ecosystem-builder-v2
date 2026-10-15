@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { calcResults } from './systembuilder.jsx';
+import { buildDiagramConfig, calcResults } from './systembuilder.jsx';
+import { DEFAULT_LIBBI2 } from './libbi2.js';
 
 // Every expected value below is hand-derived from calcResults' own logic
 // (see the PR/commit that added this file for the worked arithmetic), not
@@ -18,6 +19,31 @@ const dcHybridInv1ph = { brand: 'Fronius', phase: '1ph', hasCoupledBat: true, co
 const acBattery = { id: '1', mode: '' }; // Tesla Powerwall 2, AC Coupled
 
 describe('calcResults — CT and harvi counts', () => {
+  it('libbi 2 joins the device row; DC/Hybrid flag its own solar, no CT added', () => {
+    const dc = { phase: '1ph', inverters: [], batteries: [], selections: { 6: 1 }, libbi2: { ...DEFAULT_LIBBI2, coupling: 'dc' } };
+    const d = buildDiagramConfig(dc, false, true, true, 6);
+    expect(d.pr).toEqual(['libbi 2']);
+    expect(d.libbiPv).toBe(true);
+    expect(d.inv).toEqual([]);
+    expect(calcResults(dc, true, true, 6).totalCTs).toBe(1); // grid CT only
+  });
+
+  it('AC-coupled libbi 2 has no solar of its own; existing inverter keeps its CT', () => {
+    const cfg = { phase: '1ph', inverters: [solarInv1ph], batteries: [], selections: { 6: 1 }, libbi2: { ...DEFAULT_LIBBI2, coupling: 'ac' } };
+    const d = buildDiagramConfig(cfg, false, true, true, 6);
+    expect(d.libbiPv).toBe(false);
+    expect(d.inv).toHaveLength(1);
+    expect(d.ab).toEqual([]);
+    expect(calcResults(cfg, true, true, 6).totalCTs).toBe(2); // grid + generation
+  });
+
+  it('Hybrid keeps the existing inverter and flags libbi 2 solar', () => {
+    const cfg = { phase: '1ph', inverters: [solarInv1ph], batteries: [], selections: { 6: 1 }, libbi2: { ...DEFAULT_LIBBI2, coupling: 'hybrid' } };
+    const d = buildDiagramConfig(cfg, false, true, true, 6);
+    expect(d.libbiPv).toBe(true);
+    expect(d.inv).toHaveLength(1);
+  });
+
   it('1ph, zappi only, no solar/battery: 1 grid CT, no harvi, no extra CTs', () => {
     const cfg = { phase: '1ph', inverters: [], batteries: [], selections: zappiSel };
     const r = calcResults(cfg, true, true, 2);

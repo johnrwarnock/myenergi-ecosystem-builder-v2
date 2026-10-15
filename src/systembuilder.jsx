@@ -5,7 +5,14 @@ import eddiImgUrl from "./eddi.svg";
 import eddiPlusImgUrl from "./eddi+.svg";
 import gloImgUrl from "./GLO.svg";
 import harviImgUrl from "./harvi.svg";
-import libbiImgUrl from "./libbi.svg";
+import libbi2ImgUrl from "./libbi2.svg";
+import { Libbi2InstallDiagram } from "./diagram/Libbi2InstallDiagram.jsx";
+import {
+  LIBBI2_INVERTERS, LIBBI2_COUPLING, REGIONS, DEFAULT_LIBBI2, BACKUP_CIRCUIT_OPTIONS,
+  libbi2Summary, libbi2Warnings, libbi2ProtectionRows, effectiveCoupling, COUPLING_LABELS, conductorColours, amps,
+} from "./libbi2.js";
+import { batterySupportArticles, GENERAL_BATTERY_ARTICLE, HYBRID_ARTICLE } from "./supportArticles.js";
+import { Tip, InfoNote, SectionHead, PicCard, PhaseIcon, SolarOnlyIcon, SolarBatteryIcon, BackupHouse, StackGraphic, BreakerBadge, Zoomable, ViewSwitch, ToggleRow } from "./ui.jsx";
 
 // ── Brand design tokens ───────────────────────────────────────────────────────
 const G      = "#40ff7a";   // Accent 1 — myenergi green
@@ -19,7 +26,6 @@ const YELLOW = "#ff008c";   // Accent 2 — harvi / wireless indicator
 const BLUE   = "#56c1dd";   // info blue
 
 export const INVERTER_BRANDS = [
-  { name: "myenergi libbi",       acOnly: false, allInOne: true,  autoBatId: 14 },
   { name: "Tesla Powerwall 3",    acOnly: false, allInOne: true,  autoBatId: 2  },
   { name: "Sigenergy",            acOnly: false, allInOne: true,  autoBatId: 4  },
   { name: "Alpha ESS",            acOnly: false, allInOne: true,  autoBatId: 6  },
@@ -39,7 +45,6 @@ export const INVERTER_BRANDS = [
 ];
 
 export const BATTERIES = [
-  { id: 14, label: "myenergi libbi",             type: "AC or DC" },
   { id: 4,  label: "Sigenergy SigenStor",        type: "DC Hybrid" },
   { id: 1,  label: "Tesla Powerwall 2",          type: "AC Coupled" },
   { id: 2,  label: "Tesla Powerwall 3",          type: "AC or DC" },
@@ -63,33 +68,39 @@ export const AC_BATTERIES = BATTERIES.filter(b => b.type === "AC Coupled" || b.t
 export const PRODUCTS = [
   {
     id: 2, name: "zappi multiphase (7 / 22kW)", friendlyName: "zappi",
-    tagline: "Smart EV Charger",
+    tagline: "Smart EV charger",
     desc: "Charges your electric vehicle using surplus solar or off-peak power. Works with all EVs.",
     ctsIncluded: 3, ctsSupported: 3,
+    protection: { breaker: "40 A MCB", rcd: "Type A", cable: "6–10 mm² Cu" }, // EV charger
   },
   {
     id: 3, name: "GLO", friendlyName: "GLO",
-    tagline: "Single-Phase EV Charger",
+    tagline: "Simple smart EV charger",
     desc: "Simple but smart younger cousin to zappi. Single phase only, no screen, same smart functionality.",
     ctsIncluded: 1, ctsSupported: 2,
+    protection: { breaker: "40 A MCB", rcd: "Type A", cable: "6–10 mm² Cu" }, // EV charger
   },
   {
     id: 4, name: "eddi", friendlyName: "eddi",
-    tagline: "Solar Diverter",
+    tagline: "Hot water from solar",
     desc: "Diverts surplus solar to heat water or other appliances instead of exporting it to the grid.",
     ctsIncluded: 1, ctsSupported: 2, hasAppliances: true,
+    protection: { breaker: "16 A MCB", rcd: "Type A", cable: "2.5 mm² Cu min" },
   },
   {
     id: 5, name: "eddi+", friendlyName: "eddi+",
-    tagline: "Solar Diverter Plus",
+    tagline: "Diverter with 3 CT inputs",
     desc: "Like eddi, with 3 CT inputs — ideal for 3-phase installations or complex setups.",
     ctsIncluded: 3, ctsSupported: 3, hasAppliances: true,
+    protection: { breaker: "16 A MCB", rcd: "Type A", cable: "2.5 mm² Cu min" },
   },
   {
-    id: 6, name: "libbi", friendlyName: "libbi",
-    tagline: "Home Battery System",
-    desc: "Stores surplus solar energy to power your home in the evening or during grid outages.",
-    ctsIncluded: 1, ctsSupported: 3,
+    id: 6, name: "libbi 2", friendlyName: "libbi 2",
+    tagline: "Home battery + inverter",
+    desc: "Hybrid inverter with 1–8 stackable 5 kWh battery modules. DC or AC coupled, with optional EPS backup.",
+    // 1 CT ships in the inverter box; the libbi 2 controller has CT1–CT3 inputs (manual p.21, p.40)
+    ctsIncluded: 1, ctsSupported: 3, maxQty: 1, // parallel libbi 2 not supported (manual p.13, p.15)
+    protection: "libbi2", // computed per configuration — see libbi2ProtectionRows
   },
 ];
 
@@ -141,12 +152,17 @@ export function buildDiagramConfig(cfg, wireless, monitorSolar, monitorBattery, 
       };
     });
 
+  // libbi 2 sits in the device row below the switchboard (controller +
+  // stack); its own solar panels hang off it when DC or Hybrid. No CT of its
+  // own — the controller reads it over RS485 (manual p.55).
+  const libbiPv = (selections[6] || 0) > 0 && libbi2Summary(cfg.libbi2 || DEFAULT_LIBBI2).hasPv;
+
   const ORDER = [
     { id: 2, name: "zappi" },
     { id: 5, name: "eddi+" },
     { id: 4, name: "eddi" },
     { id: 3, name: "GLO" },
-    { id: 6, name: "libbi" },
+    { id: 6, name: "libbi 2" },
   ];
   const pr = [];
   const ctrlEntry = ORDER.find(p => p.id === controllerProductId);
@@ -185,7 +201,9 @@ export function buildDiagramConfig(cfg, wireless, monitorSolar, monitorBattery, 
   const ctrlProduct = PRODUCTS.find(p => p.friendlyName === pr[0]);
   const ctrlCtsSupported = ctrlProduct?.ctsSupported ?? 3;
 
-  return { sp, inv, ab, wl: wlFinal, pr, appliancesList, mainSwitchSplit, ctrlCtsSupported };
+  // zappi is the only myenergi device wired across three phases
+  const threePhaseDevices = phase === "3ph" && !zappiSinglePhase ? ["zappi"] : [];
+  return { sp, inv, ab, wl: wlFinal, pr, appliancesList, mainSwitchSplit, ctrlCtsSupported, region: cfg.region || "aunz", threePhaseDevices, libbiPv };
 }
 
 const ICON_URLS = {
@@ -193,7 +211,7 @@ const ICON_URLS = {
   "GLO":   gloImgUrl,
   "eddi":  eddiImgUrl,
   "eddi+": eddiPlusImgUrl,
-  "libbi": libbiImgUrl,
+  "libbi 2": libbi2ImgUrl,
   "harvi": harviImgUrl,
 };
 
@@ -291,40 +309,31 @@ export function calcResults(cfg, monitorSolar, monitorBattery, controllerProduct
 // ── Plain-English CT summary ──────────────────────────────────────────────────
 export function generatePlainEnglish(result, ctConfig, effectiveWireless, cfg, harviTotal) {
   if (!result) return [];
-  const { totalCTs, ctsIncluded, additionalCTs, harvisNeeded } = result;
+  const { totalCTs, additionalCTs } = result;
   const lines = [];
   const ph = cfg.phase;
+  const clamps = n => `${n} CT clamp${n !== 1 ? "s" : ""}`;
 
-  if (totalCTs === 0) {
-    lines.push("No CT clamps (sensors) are needed for this setup.");
-    return lines;
+  const l2 = (cfg.selections?.[6] || 0) > 0 ? libbi2Summary(cfg.libbi2) : null;
+  if (l2) {
+    const solar = l2.hasPv ? "solar panels connected to it" : "your existing solar";
+    const list = cfg.backupCircuits.map(c => c.toLowerCase());
+    const named = list.length > 1 ? `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}` : list[0];
+    const backup = cfg.libbi2.eps ? `, and keeps ${named || "selected circuits"} on in a power cut` : "";
+    lines.push(`libbi 2 stores ${l2.capacityKWh} kWh from ${solar}${backup}.`);
   }
 
-  const clampWord = n => `${n} CT clamp${n !== 1 ? "s" : ""}`;
-  lines.push(`You'll need ${clampWord(totalCTs)} in total — these are clip-on sensors that measure electricity flow without interrupting your wiring.`);
+  if (totalCTs === 0) { lines.push("No CT clamps are needed."); return lines; }
 
+  const where = [];
   ctConfig.forEach(row => {
-    if (row.component.includes("Grid")) {
-      if (ph === "3ph") lines.push(`• ${clampWord(3)} go around your three-phase supply cables — one per phase.`);
-      else if (ph === "2ph") lines.push(`• ${clampWord(2)} go around your two-phase supply cables.`);
-      else lines.push(`• 1 CT clamp goes around your incoming electricity supply cable.`);
-    } else if (row.component.includes("Solar") || row.component.includes("DC Hybrid")) {
-      lines.push(`• 1 CT clamp goes around your solar generation cable.`);
-    } else if (row.component.includes("Battery")) {
-      lines.push(`• 1 CT clamp goes around your battery connection cable.`);
-    }
+    if (row.component.includes("Grid")) where.push(ph === "3ph" ? "3 on the incoming supply (one per phase)" : ph === "2ph" ? "2 on the incoming supply" : "1 on the incoming supply");
+    else if (row.component.includes("Solar") || row.component.includes("DC Hybrid")) where.push(`${row.cts} on the solar`);
+    else if (row.component.includes("Battery")) where.push(`${row.cts} on the battery`);
   });
-
-  if (harviTotal > 0) {
-    lines.push(`A harvi wireless transmitter is needed to relay CT readings to your myenergi device — this happens automatically once paired.`);
-  }
-
-  if (additionalCTs > 0) {
-    lines.push(`⚠ ${clampWord(additionalCTs)} will need to be purchased separately — they're not included with your selected devices.`);
-  } else {
-    lines.push(`✓ All required CT clamps are included with your selected device${result.selProds.length > 1 ? "s" : ""} — no extras to buy.`);
-  }
-
+  lines.push(`You need ${clamps(totalCTs)}: ${where.join(", ")}. They clip around cables to measure power.`);
+  if (harviTotal > 0) lines.push(`${harviTotal} harvi send${harviTotal === 1 ? "s" : ""} the clamp readings wirelessly.`);
+  lines.push(additionalCTs > 0 ? `Order ${clamps(additionalCTs)} extra. The rest come with your devices.` : "All CT clamps come with your devices.");
   return lines;
 }
 
@@ -372,6 +381,20 @@ const statBox = (label, val, col) => (
   </div>
 );
 
+// ── Conductor colour key for the ecosystem wiring diagram ────────────────────
+function ConductorKey({ region, phase }) {
+  const cc = conductorColours(region);
+  const n = phase === "3ph" ? 3 : phase === "2ph" ? 2 : 1;
+  const sw = col => ({ display: "inline-block", width: 18, height: 4, background: col, border: col.toLowerCase() === "#ffffff" ? "1px solid #888" : "none", verticalAlign: "middle", marginRight: 5 });
+  return (
+    <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: "4px 14px", fontSize: 11, color: MUTED }}>
+      {cc.L.slice(0, n).map((c, i) => <span key={i}><span style={sw(c)}/>{n > 1 ? `L${i + 1}` : "Line"} · {cc.names[i]}</span>)}
+      <span><span style={sw("#d97706")}/>DC (PV / battery)</span>
+      <span>Neutral ({cc.nName}) and earth are shown on the libbi 2 diagram.</span>
+    </div>
+  );
+}
+
 // ── InverterCard ─────────────────────────────────────────────────────────────
 function InverterCard({ inv, phase, onChange, onRemove }) {
   const needsPhase = phase === "3ph" || phase === "2ph";
@@ -413,27 +436,21 @@ function InverterCard({ inv, phase, onChange, onRemove }) {
 
       {needsPhase && inv.brand && (
         <div style={{ marginBottom: 10 }}>
-          <SecLabel>Inverter Phase</SecLabel>
-          <div style={{ display: "flex", gap: 8 }}>
-            <SelBtn active={inv.phase === "1ph"} onClick={() => onChange({ ...inv, phase: "1ph" })}>1ph</SelBtn>
-            <SelBtn active={inv.phase === "3ph"} onClick={() => onChange({ ...inv, phase: "3ph" })}>3ph</SelBtn>
+          <SecLabel>Inverter phase</SecLabel>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <SelBtn active={inv.phase === "1ph"} onClick={() => onChange({ ...inv, phase: "1ph" })}>Single phase</SelBtn>
+            <SelBtn active={inv.phase === "3ph"} onClick={() => onChange({ ...inv, phase: "3ph" })}>Three phase</SelBtn>
           </div>
         </div>
       )}
 
       {inv.brand && !isAcOnly && (
         <div style={{ marginTop: 4 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "10px 12px", background: inv.hasCoupledBat ? "rgba(64,255,122,0.08)" : CARD, borderRadius: 6, border: `1px solid ${inv.hasCoupledBat ? G : BORDER}` }}
-            onClick={handleHybridToggle}>
-            <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${inv.hasCoupledBat ? G : "#666"}`, background: inv.hasCoupledBat ? G : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              {inv.hasCoupledBat && <span style={{ color: "#000", fontSize: 11, fontWeight: 900, lineHeight: 1 }}>✓</span>}
-            </div>
-            <div>
-              <div style={{ fontSize: 13, color: inv.hasCoupledBat ? G_TXT : "#ccc" }}>This is a hybrid inverter with a coupled DC battery</div>
-              <div style={{ fontSize: 12, color: MUTED, marginTop: 1 }}>Solar and battery share one inverter — only one CT required</div>
-            </div>
+          <SecLabel>What does it run? <Tip term="hybrid"/></SecLabel>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <PicCard active={!inv.hasCoupledBat} onClick={() => inv.hasCoupledBat && handleHybridToggle()} title="Solar only"><SolarOnlyIcon/></PicCard>
+            <PicCard active={inv.hasCoupledBat} onClick={() => !inv.hasCoupledBat && handleHybridToggle()} title="Solar + battery" sub={coupledBat && coupledBat.id !== 99 ? coupledBat.label : "Hybrid inverter"}><SolarBatteryIcon/></PicCard>
           </div>
-
         </div>
       )}
     </div>
@@ -443,7 +460,6 @@ function InverterCard({ inv, phase, onChange, onRemove }) {
 // ── BatteryCard ──────────────────────────────────────────────────────────────
 function BatteryCard({ bat, onChange, onRemove }) {
   const found = AC_BATTERIES.find(b => b.id === parseInt(bat.id));
-  const needsMode = found?.type === "AC or DC";
   return (
     <div style={{ background: CARD, border: `1px solid ${bat.id ? G : BORDER}`, borderRadius: 8, padding: "14px 16px", marginBottom: 8 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
@@ -451,7 +467,7 @@ function BatteryCard({ bat, onChange, onRemove }) {
         <button onClick={onRemove} style={{ background: "none", border: "none", color: "#aaa", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: 0 }}>×</button>
       </div>
       <div>
-        <SecLabel>Brand / Model</SecLabel>
+        <SecLabel>Brand / model</SecLabel>
         <select value={bat.id} onChange={e => {
           const sel = AC_BATTERIES.find(b => b.id === parseInt(e.target.value));
           const defaultMode = sel?.type === "AC or DC" ? "AC Coupled" : "";
@@ -461,15 +477,6 @@ function BatteryCard({ bat, onChange, onRemove }) {
           {AC_BATTERIES.map(b => <option key={b.id} value={b.id}>{b.label}</option>)}
         </select>
       </div>
-      {needsMode && (
-        <div style={{ marginTop: 10 }}>
-          <SecLabel>Installation Mode</SecLabel>
-          <div style={{ display: "flex", gap: 8 }}>
-            <SelBtn active={bat.mode === "AC Coupled"} onClick={() => onChange({ ...bat, mode: "AC Coupled" })}>AC Coupled</SelBtn>
-          </div>
-          <div style={{ marginTop: 6, fontSize: 12, color: MUTED }}>For DC coupled installation, add this battery via the inverter card on the Your Property step.</div>
-        </div>
-      )}
     </div>
   );
 }
@@ -498,6 +505,177 @@ function EddiApplianceSelector({ unit, idx, onChange }) {
   );
 }
 
+// ── Coupling sketch — where the solar panels connect ─────────────────────────
+// DC: panels wired straight into libbi 2. AC: libbi 2 only on the switchboard,
+// with the panels on their own separate inverter. Both when DC + existing.
+function CouplingSketch({ mode }) {
+  const ac = "#ddd", dc = "#d97706", line = "#cfcfcf";
+  const Panel = ({ x, y }) => (
+    <g transform={`translate(${x},${y})`}>
+      <path d="M8,0 H62 L54,30 H0 Z" fill="#1e2a3a" stroke="#8fb3d9" strokeWidth={1.4}/>
+      {[1, 2, 3].map(i => <line key={i} x1={8 + i * 13.5} y1={0} x2={i * 13.5} y2={30} stroke="#8fb3d9" strokeWidth={0.9}/>)}
+      <line x1={4} y1={15} x2={58} y2={15} stroke="#8fb3d9" strokeWidth={0.9}/>
+    </g>
+  );
+  // Generic solar inverter pictogram: box split by a diagonal, DC (=) in, AC (~) out
+  const Inverter = ({ x, y }) => (
+    <g transform={`translate(${x},${y})`} fill="none" stroke={line} strokeWidth={1.6} strokeLinecap="round">
+      <rect x={0} y={0} width={40} height={34} rx={3}/>
+      <line x1={0} y1={34} x2={40} y2={0}/>
+      <path d="M6 9 h9 M6 13 h9" strokeWidth={1.4}/>
+      <path d="M24 26 q2.5 -4 5 0 t5 0" strokeWidth={1.4}/>
+    </g>
+  );
+  const Board = ({ x, y }) => (
+    <g>
+      <rect x={x} y={y} width={84} height={28} rx={5} fill="#2a2a2a" stroke="#666" strokeWidth={1.5}/>
+      <text x={x + 42} y={y + 18} textAnchor="middle" fill="#ccc" fontSize={10} fontWeight={700} fontFamily="Overpass,sans-serif">SWITCHBOARD</text>
+    </g>
+  );
+  const W = ({ d, col }) => <path d={d} fill="none" stroke={col} strokeWidth={2.2}/>;
+  const pvOnLibbi = mode !== "ac", inverter = mode !== "dc";
+  const LY = 86; // libbi row centre
+  return (
+    <svg viewBox={inverter ? "0 0 400 124" : "0 50 400 74"} style={{ width: "100%", maxWidth: 400, display: "block", margin: "2px 0 4px" }}>
+      <Board x={4} y={LY - 14}/>
+      <W d={`M88,${LY} H186`} col={ac}/>
+      <rect x={186} y={LY - 34} width={40} height={68} rx={6} fill="#ececec"/>
+      <image href={libbi2ImgUrl} x={192} y={LY - 31} width={28} height={62} preserveAspectRatio="xMidYMid meet"/>
+      {pvOnLibbi && <><W d={`M226,${LY} H296`} col={dc}/><Panel x={296} y={LY - 15}/></>}
+      {inverter && <>
+        <W d={`M46,${LY - 14} V22 H186`} col={ac}/>
+        <Inverter x={186} y={5}/>
+        <W d="M226,22 H296" col={dc}/>
+        <Panel x={296} y={7}/>
+      </>}
+    </svg>
+  );
+}
+
+// ── libbi 2 configuration panel ───────────────────────────────────────────────
+function Libbi2Panel({ value, onChange, region, phase, thirdPartyCount, backupCircuits, onToggleCircuit }) {
+  const s = libbi2Summary(value);
+  const set = patch => onChange({ ...value, ...patch });
+  const warnings = libbi2Warnings(value, thirdPartyCount);
+  const eff = effectiveCoupling(value);
+  const stepBtn = (disabled) => ({ background: disabled ? "#2a2a2a" : G, border: "none", color: disabled ? "#666" : "#000", borderRadius: 999, width: 34, height: 34, cursor: disabled ? "not-allowed" : "pointer", fontSize: 20, lineHeight: 1, fontFamily: "inherit", fontWeight: 700 });
+  const atMin = s.modules <= s.inverter.minModules, atMax = s.modules >= s.inverter.maxModules;
+  return (
+    <div style={{ marginTop: 10, padding: "16px", background: "#262626", border: `1px solid ${BORDER}`, borderRadius: 10, display: "flex", flexDirection: "column", gap: 18 }}>
+      <div style={{ fontSize: 15, color: "#fff", fontWeight: 800 }}>Set up libbi 2</div>
+
+      <div>
+        <SectionHead>Inverter size</SectionHead>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {LIBBI2_INVERTERS.filter(i => i.available).map(i => (
+            <SelBtn key={i.id} active={s.inverter.id === i.id}
+              onClick={() => set({ inverterId: i.id, modules: Math.min(Math.max(value.modules, i.minModules), i.maxModules) })}>{i.label}</SelBtn>
+          ))}
+        </div>
+        <div style={{ fontSize: 12, color: s.inverter.provisional ? WARN : MUTED, marginTop: 6 }}>
+          {s.inverter.provisional ? "Specifications to be confirmed" : `Up to ${s.inverter.maxPvInputW / 1000} kW of solar panels`}
+        </div>
+      </div>
+
+      <div>
+        <SectionHead>Battery size</SectionHead>
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <StackGraphic modules={s.modules} max={s.inverter.maxModules} kWh={s.capacityKWh}/>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ fontSize: 30, fontWeight: 800, color: G, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{s.capacityKWh} <span style={{ fontSize: 15, fontWeight: 700 }}>kWh</span></div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <button type="button" aria-label="Remove a module" style={stepBtn(atMin)} disabled={atMin} onClick={() => set({ modules: s.modules - 1 })}>−</button>
+              <span style={{ fontSize: 14, color: "#ddd", minWidth: 74, textAlign: "center" }}>{s.modules} module{s.modules > 1 ? "s" : ""}</span>
+              <button type="button" aria-label="Add a module" style={stepBtn(atMax)} disabled={atMax} onClick={() => set({ modules: s.modules + 1 })}>+</button>
+            </div>
+            {s.needsExpansionKit && <div style={{ fontSize: 12, color: MUTED }}>Includes expansion kit ({s.inverter.expansionKitFrom}+ modules)</div>}
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <SectionHead tipText="Connect solar to libbi 2 (DC coupled): new panels plug straight into libbi 2. Use existing solar (AC coupled): libbi 2 connects to the switchboard and stores surplus from solar that already has its own inverter. Hybrid: both, new panels on libbi 2 and the existing solar inverter kept.">Solar connection</SectionHead>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {LIBBI2_COUPLING.map(c => (
+            <PicCard key={c.id} active={eff === c.id} onClick={() => set({ coupling: c.id })} title={c.label} sub={c.sub}>
+              <CouplingSketch mode={c.id}/>
+            </PicCard>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <SectionHead tip="EPS">Backup power</SectionHead>
+        <div style={{ display: "flex", gap: 8, marginBottom: value.eps ? 10 : 0 }}>
+          <SelBtn active={value.eps} onClick={() => set({ eps: true })}>Yes</SelBtn>
+          <SelBtn active={!value.eps} onClick={() => set({ eps: false })}>No</SelBtn>
+        </div>
+        {value.eps
+          ? <BackupHouse options={BACKUP_CIRCUIT_OPTIONS} selected={backupCircuits} onToggle={onToggleCircuit}/>
+          : <div style={{ fontSize: 12, color: MUTED, marginTop: 6 }}>The home goes off in a power cut.</div>}
+        {value.eps && <div style={{ fontSize: 12, color: MUTED, marginTop: 6 }}>Backup supply up to {amps(s.inverter.epsRatedA)}.</div>}
+      </div>
+
+      {region === "aunz" && (
+        <ToggleRow checked={!!value.csip} onChange={() => set({ csip: !value.csip })} label="CSIP-AUS controlled site" tip="csip"/>
+      )}
+
+      {(phase === "3ph" || warnings.length > 0) && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {phase === "3ph" && <InfoNote>libbi 2 is single phase. Supply its controller from L1.</InfoNote>}
+          {warnings.map(w => <InfoNote key={w} tone="warn">{w}</InfoNote>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Circuit protection, as one card per product ──────────────────────────────
+function ProtectionCards({ rows }) {
+  const groups = [];
+  rows.forEach(r => {
+    const g = groups.find(x => x.product === r.product);
+    g ? g.rows.push(r) : groups.push({ product: r.product, rows: [r] });
+  });
+  const dim = v => (v === "TBC" ? WARN : "#bbb");
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 10 }}>
+      {groups.map(g => (
+        <div key={g.product} style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 10, padding: 14, display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: "#fff" }}>{g.product}</div>
+          {g.rows.map((r, i) => (
+            <div key={i} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+              <BreakerBadge text={r.breaker} kind={/earth/i.test(r.circuit) ? "earth" : /isolator/i.test(r.breaker) ? "isolator" : "breaker"}/>
+              <div style={{ minWidth: 0, fontSize: 12, lineHeight: 1.5 }}>
+                <div style={{ fontSize: 13, color: "#eee", fontWeight: 700 }}>{r.circuit}</div>
+                {r.breaker !== "—" && <div style={{ color: dim(r.breaker) }}>{r.breaker}</div>}
+                {r.rcd !== "—" && <div style={{ color: dim(r.rcd) }}>RCD: {r.rcd}</div>}
+                <div style={{ color: dim(r.cable) }}>Cable: {r.cable}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Circuit protection table ──────────────────────────────────────────────────
+export function protectionRows(cfg, selProds, harviTotal) {
+  const rows = [];
+  selProds.forEach(p => {
+    const tag = cfg.existing?.[p.id] ? " (existing)" : "";
+    if (p.protection === "libbi2") rows.push(...libbi2ProtectionRows(cfg.libbi2 || DEFAULT_LIBBI2).map(r => ({ ...r, product: r.product + tag })));
+    else for (let i = 0; i < p.qty; i++) {
+      const pr = p.protection;
+      rows.push({ product: (p.qty > 1 ? `${p.friendlyName} ${i + 1}` : p.friendlyName) + tag, circuit: "Dedicated supply",
+        breaker: pr?.breaker || "TBC", rcd: pr?.rcd || "TBC", cable: pr?.cable || "TBC" });
+    }
+  });
+  if (harviTotal > 0) rows.push({ product: "harvi", circuit: "—", breaker: "Not required (powered by its CT)", rcd: "—", cable: "CT cable: twisted pair, up to 100 m" });
+  return rows;
+}
+
 // ── myenergi App Preview ──────────────────────────────────────────────────────
 
 const ICON_ORIGINS = {
@@ -519,9 +697,57 @@ const ICON_PATHS = {
   zappi:  { d: "M68.0406 410.199C67.4273 410.199 66.8161 410.452 66.3547 410.913L63.875 413.393C63.6207 413.647 63.4 414.102 63.4 414.52V414.999H47.4C41.6836 414.999 37 419.683 37 425.399V434.199C37 435.516 38.0836 436.599 39.4 436.599H40.2V438.199C40.2 439.515 41.284 440.599 42.6 440.599H43.5719C44.0979 442.44 45.7957 443.799 47.8 443.799C49.8043 443.799 51.5021 442.44 52.0281 440.599H64.3719C64.8979 442.44 66.5957 443.799 68.6 443.799C70.6043 443.799 72.3021 442.44 72.8281 440.599H74.6C75.916 440.599 77 439.515 77 438.199V434.338C77 432.584 75.7216 431.075 73.9906 430.787L74.0266 430.793L67.8703 429.482L65.0078 425.474C64.2579 424.423 63.0437 423.799 61.7531 423.799H51.0359C50.0032 423.799 49.0313 424.298 48.4312 425.138L45.3312 429.48L43.2375 429.916H43.2359C41.2372 430.333 40.2 432.02 40.2 433.693V434.999H39.4C38.9564 434.999 38.6 434.643 38.6 434.199V425.399C38.6 420.556 42.5564 416.599 47.4 416.599H63.4V417.079C63.4 417.497 63.6207 417.951 63.875 418.205L66.3547 420.685C66.8161 421.147 67.4273 421.399 68.0406 421.399H71.4C71.8178 421.399 72.2437 421.246 72.5453 420.945C72.8469 420.643 73 420.217 73 419.799H77V418.199H73V413.399H77V411.799H73C73 411.381 72.8469 410.956 72.5453 410.654C72.2437 410.352 71.8178 410.199 71.4 410.199H68.0406ZM68.0406 411.799H71.4V419.799H68.0406C67.854 419.799 67.6645 419.732 67.4859 419.554L65.0063 417.074C65.0025 417.07 65.003 417.072 65 417.07V414.529C65.003 414.526 65.0025 414.528 65.0063 414.524L67.4859 412.045C67.6645 411.866 67.854 411.799 68.0406 411.799ZM51.0359 425.399H55.4V429.399H47.3531L49.7328 426.07C50.0335 425.649 50.5183 425.399 51.0359 425.399ZM57 425.399H61.7531C62.5281 425.399 63.2562 425.773 63.7063 426.404L65.8453 429.399H57V425.399ZM45.8797 430.999H67.3188L73.7109 432.362L73.7281 432.365C74.6979 432.526 75.4 433.355 75.4 434.338V438.199C75.4 438.651 75.052 438.999 74.6 438.999H72.9797C72.7758 436.765 70.8856 434.999 68.6 434.999C66.3144 434.999 64.4242 436.765 64.2203 438.999H52.1797C51.9758 436.765 50.0856 434.999 47.8 434.999C45.5144 434.999 43.6242 436.765 43.4203 438.999H42.6C42.148 438.999 41.8 438.651 41.8 438.199V433.693C41.8 432.58 42.2249 431.762 43.5625 431.482L45.8797 430.999ZM47.8 436.599C49.3559 436.599 50.6 437.843 50.6 439.399C50.6 440.955 49.3559 442.199 47.8 442.199C46.2441 442.199 45 440.955 45 439.399C45 437.843 46.2441 436.599 47.8 436.599ZM68.6 436.599C70.1559 436.599 71.4 437.843 71.4 439.399C71.4 440.955 70.1559 442.199 68.6 442.199C67.0441 442.199 65.8 440.955 65.8 439.399C65.8 437.843 67.0441 436.599 68.6 436.599Z" },
 };
 
+// Operating modes per device type, as shown in the myenergi app.
+// Sources: support.myenergi.com — "What are the zappi charging modes?",
+// "Charging Modes With zappi GLO", "How eddi Handles Boosting"; libbi
+// Normal/Stopped/Export as exposed by the myenergi API.
+const DEVICE_MODES = {
+  zappi: {
+    label: "zappi", default: "ECO",
+    modes: {
+      ECO:    { bg: "#FFCC00", fg: "#000", desc: "Matches the charge to surplus solar and tops up from the grid when there isn't enough. Once the EV is plugged in, charging never drops below the 1.4 kW minimum (4.2 kW on three phase)." },
+      "ECO+": { bg: "#40ff7a", fg: "#000", desc: "Charges only from surplus solar. It waits for enough surplus (about 1.4 kW single phase, 4.2 kW three phase) before starting, and pauses when it drops away." },
+      FAST:   { bg: "#0086FF", fg: "#fff", desc: "Charges as fast as the EV will take, up to 32 A (about 7.4 kW single phase or 22 kW three phase), within any device or grid limits." },
+      BOOST:  { bg: "#0086FF", fg: "#fff", desc: "A timed override set from ECO or ECO+, either manually, on a schedule or as a Smart Boost. zappi charges at full power while the boost is active." },
+      STOP:   { bg: "#FF008C", fg: "#fff", desc: "zappi will not charge. Surplus solar goes to other devices or is exported." },
+    },
+  },
+  glo: {
+    label: "GLO", default: "SMART ON",
+    modes: {
+      "SMART ON":  { bg: "#40ff7a", fg: "#000", desc: "Smart charging on: GLO uses surplus solar, follows your charging schedule, and responds to dynamic tariffs and demand-response events. zappi GLO replaces Fast, Eco and Eco+ with this." },
+      "SMART OFF": { bg: "#0086FF", fg: "#fff", desc: "Smart charging off: GLO charges as soon as the EV is plugged in, as fast as possible, until the vehicle stops asking for power." },
+    },
+  },
+  eddi: {
+    label: "eddi", default: "NORMAL",
+    modes: {
+      NORMAL: { bg: "#00E6C0", fg: "#000", desc: "Diverts surplus solar into the hot water heater (or other connected load) instead of exporting it, until the tank reaches temperature." },
+      BOOST:  { bg: "#0086FF", fg: "#fff", desc: "Heats now using surplus solar, topped up from the grid. A manual boost ends at max temperature; a scheduled boost reheats within its time window if the tank cools." },
+      STOP:   { bg: "#FF008C", fg: "#fff", desc: "eddi will not divert or boost. Surplus solar goes to other devices or is exported." },
+    },
+  },
+  libbi: {
+    label: "libbi 2", default: "NORMAL",
+    modes: {
+      NORMAL: { bg: "#FF9234", fg: "#000", desc: "Stores surplus solar and discharges to power the home when generation falls short. With 'Enable charging from the grid' ticked, it can also charge at the cheapest tariff times." },
+      STOP:   { bg: "#FF008C", fg: "#fff", desc: "libbi 2 neither charges nor discharges. The home runs from solar and the grid only." },
+      EXPORT: { bg: "#0086FF", fg: "#fff", desc: "Discharges stored energy to power the home and exports the rest to the grid, within the export limit." },
+    },
+  },
+};
+
 function AppPreview({ cfg, result, monitorSolar = true, monitorBattery = true, zappiSinglePhase = false }) {
   const [now, setNow] = useState(() => new Date());
-  const [mode, setMode] = useState('ECO');
+  const [modes, setModes] = useState(() => Object.fromEntries(Object.entries(DEVICE_MODES).map(([k, v]) => [k, v.default])));
+  const setMode = (dev, m) => setModes(ms => ({ ...ms, [dev]: m }));
+  // Device priority: ordered groups of individual units ("zappi#1",
+  // "zappi#2"…); units in the same group share surplus. New units are added
+  // in myenergi's advised order: eddi first, then the EV chargers.
+  const [priority, setPriority] = useState([]);
+  const [dragKey, setDragKey] = useState(null);
+  const anglesRef = useRef({});
+  const [, setSpin] = useState(0);
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 10000);
@@ -535,17 +761,18 @@ function AppPreview({ cfg, result, monitorSolar = true, monitorBattery = true, z
   const hybridInverters = solarInverters.filter(i => i.hasCoupledBat);
   const soloInverters   = solarInverters.filter(i => !i.hasCoupledBat);
   const hasGenBat       = monitorSolar && hybridInverters.length > 0;
-  const hasSolarOnly    = monitorSolar && soloInverters.length > 0;
+  const libbiPv         = hasLibbi && libbi2Summary(cfg.libbi2).hasPv; // PV wired straight into libbi 2
+  const hasSolarOnly    = monitorSolar && (soloInverters.length > 0 || libbiPv);
   const hasSolarNode    = hasGenBat || hasSolarOnly;
-  const hasStandaloneBat = hasLibbi || (cfg.batteries || []).length > 0;
-  const showBatteryNode  = monitorBattery && hasStandaloneBat;
+  // Third-party AC batteries are monitored by CT; libbi 2 always has its own spoke
+  const showBatteryNode  = monitorBattery && (cfg.batteries || []).some(b => b.id);
 
-  const numZappis = (sels[2] || 0) + (sels[3] || 0);
-  const numEddis  = (sels[4] || 0) + (sels[5] || 0);
+  const nZappi = sels[2] || 0, nGlo = sels[3] || 0;
+  const numEddis = (sels[4] || 0) + (sels[5] || 0);
 
   // Solar generation curve — peaks at 13:00, zero before 6 or after 20
   // Calculated from inverter existence, regardless of monitoring (monitoring only hides the node)
-  const hasSolarInverters = solarInverters.length > 0;
+  const hasSolarInverters = solarInverters.length > 0 || libbiPv;
   const peakSolar = cfg.phase === '3ph' ? 10 : 6.6;
   const hr = now.getHours() + now.getMinutes() / 60;
   const rawSolar = (hr >= 6 && hr <= 20) ? peakSolar * Math.sin(Math.PI * (hr - 6) / 14) : 0;
@@ -553,48 +780,74 @@ function AppPreview({ cfg, result, monitorSolar = true, monitorBattery = true, z
 
   const houseKw  = 0.4;
   const zappiMax = (cfg.phase === '3ph' && !zappiSinglePhase) ? 11 : 7.2;
-
-  // Power flow calculations per mode
-  let zappiKwEach = 0, eddiKwEach = 0, gridKw = 0, gridExport = 0, zappiPaused = false;
+  const zappiMin = (cfg.phase === '3ph' && !zappiSinglePhase) ? 4.2 : 1.4;
+  const gloMax = 7.2, eddiMax = 3.6;
+  const libbiKw = hasLibbi ? libbi2Summary(cfg.libbi2).dischargeKW : 0;
   const r1 = v => Math.round(v * 10) / 10;
+  const zm = modes.zappi, gm = modes.glo, em = modes.eddi, lm = modes.libbi;
 
-  if (mode === 'STOP') {
-    // All myenergi devices stopped — surplus solar exports to grid
-    const surplus = r1(effectiveSolar - houseKw);
-    gridExport = Math.max(0, surplus);
-    gridKw     = Math.max(0, r1(houseKw - effectiveSolar));
-  } else if (mode === 'FAST' || mode === 'BOOST') {
-    zappiKwEach = numZappis > 0 ? zappiMax : 0;
-    eddiKwEach  = mode === 'BOOST' && numEddis > 0 ? 3.6 : 0;
-    const totalLoad = houseKw + zappiKwEach * numZappis + eddiKwEach * numEddis;
-    gridKw = Math.max(0, r1(totalLoad - effectiveSolar));
-  } else {
-    // ECO / ECO+: eddi gets surplus priority (up to 3.6 kW each), zappi gets remainder
-    const available = r1(effectiveSolar - houseKw);
-    eddiKwEach = numEddis > 0 && available > 0
-      ? Math.min(r1(available / numEddis), 3.6) : 0;
-    const afterEddi = r1(Math.max(0, available - eddiKwEach * numEddis));
-    const availPerZappi = numZappis > 0 ? afterEddi / numZappis : 0;
+  // ── Power flow for the selected modes and priority order ───────
+  // Full-power loads first. Then spare solar goes down the priority list
+  // (support.myenergi.com "Setting Device Priorities"): priority 1 uses it
+  // first, devices sharing a priority split it. An EV charger needs ~1.4 kW
+  // to start, so when eddi sits above it eddi diverts until there's enough,
+  // then the charger takes over and eddi gets what's left.
+  let surplus = r1(effectiveSolar - houseKw);
+  const present = { zappi: nZappi, glo: nGlo, eddi: numEddis, libbi: hasLibbi ? 1 : 0 };
+  const typeOf = u => u.split('#')[0];
+  const allUnits = ['eddi', 'zappi', 'glo', 'libbi'].flatMap(t => Array.from({ length: present[t] }, (_, i) => `${t}#${i + 1}`));
+  const kept = priority.map(g => g.filter(u => allUnits.includes(u))).filter(g => g.length);
+  const knownUnits = new Set(kept.flat());
+  const pGroups = [...kept, ...allUnits.filter(u => !knownUnits.has(u)).map(u => [u])];
 
-    if (mode === 'ECO+') {
-      zappiKwEach = numZappis > 0 ? Math.max(0, r1(availPerZappi)) : 0;
-      zappiPaused = numZappis > 0 && zappiKwEach < 1.4;
-      gridExport  = Math.max(0, r1(afterEddi - zappiKwEach * numZappis));
-    } else {
-      // ECO: minimum 1.4 kW per zappi, grid supplements shortfall
-      if (numZappis === 0 || availPerZappi >= 1.4) {
-        zappiKwEach = numZappis > 0 ? Math.max(0, r1(availPerZappi)) : 0;
-        gridExport  = Math.max(0, r1(afterEddi - zappiKwEach * numZappis));
-      } else {
-        zappiKwEach = 1.4;
-        gridKw = Math.max(0, r1(houseKw + zappiKwEach * numZappis + eddiKwEach * numEddis - effectiveSolar));
-      }
+  const fixed = { zappi: zm === 'FAST' || zm === 'BOOST', glo: gm === 'SMART OFF', eddi: em === 'BOOST', libbi: false };
+  const takes = { zappi: zm === 'ECO' || zm === 'ECO+', glo: gm === 'SMART ON', eddi: em === 'NORMAL', libbi: lm === 'NORMAL' };
+  const evMin = { zappi: zappiMin, glo: 1.4 };
+  const cap = { zappi: zappiMax, glo: gloMax, eddi: eddiMax, libbi: libbiKw };
+  const isEv = u => typeOf(u) === 'zappi' || typeOf(u) === 'glo';
+  const kwOf = {}, pausedOf = {};
+  allUnits.forEach(u => { const t = typeOf(u); kwOf[u] = fixed[t] ? cap[t] : 0; surplus = r1(surplus - kwOf[u]); });
+
+  // eddi hands over to lower-priority EV chargers once there's enough to start one
+  const order = [];
+  pGroups.forEach((g, gi) => {
+    if (g.some(u => typeOf(u) === 'eddi') && takes.eddi) {
+      const evsBelow = pGroups.slice(gi + 1).map(x => x.filter(u => isEv(u) && takes[typeOf(u)])).filter(x => x.length);
+      const evs = evsBelow.flat();
+      if (evs.length && surplus >= Math.min(...evs.map(u => evMin[typeOf(u)]))) { order.push(...evsBelow); order.push(g); return; }
     }
-  }
+    order.push(g);
+  });
+  const seenU = new Set();
+  const finalOrder = order.map(g => g.filter(u => !seenU.has(u) && seenU.add(u))).filter(g => g.length);
 
-  // Final energy balance — ensure grid covers any load not already met by solar
-  const totalLoad = r1(houseKw + zappiKwEach * numZappis + eddiKwEach * numEddis);
-  gridKw = Math.max(gridKw, Math.max(0, r1(totalLoad - effectiveSolar)));
+  let batCharge = 0;
+  finalOrder.forEach(g => {
+    const active = g.filter(u => takes[typeOf(u)] && !fixed[typeOf(u)]);
+    if (!active.length) return;
+    const shareEach = Math.max(0, surplus) / active.length;
+    active.forEach(u => {
+      const t = typeOf(u);
+      let each = Math.min(r1(shareEach), cap[t]);
+      if (isEv(u) && each < evMin[t]) {
+        if (t === 'zappi' && zm === 'ECO') each = evMin.zappi;   // ECO tops up from the grid
+        else { each = 0; pausedOf[u] = true; }
+      }
+      kwOf[u] = each;
+      if (t === 'libbi') batCharge = each;
+      surplus = r1(surplus - each);
+    });
+  });
+
+  let batDischarge = 0;
+  if (hasLibbi && lm === 'NORMAL' && surplus < 0 && batCharge === 0) {
+    batDischarge = Math.min(-surplus, libbiKw, houseKw); surplus = r1(surplus + batDischarge);
+  } else if (hasLibbi && lm === 'EXPORT') {
+    batDischarge = libbiKw; surplus = r1(surplus + batDischarge);
+  }
+  const gridExport = Math.max(0, surplus);
+  const gridKw = Math.max(0, -surplus);
+  const totalLoad = r1(houseKw + allUnits.filter(u => typeOf(u) !== 'libbi').reduce((t, u) => t + kwOf[u], 0));
 
   // Green percentage — 0% if no solar or solar unmonitored
   const greenPct = (!hasSolarInverters || !monitorSolar) ? 0
@@ -617,22 +870,56 @@ function AppPreview({ cfg, result, monitorSolar = true, monitorBattery = true, z
 
   const gridExporting = gridExport > 0 && gridKw === 0;
 
-  // Build nodes
-  const nodes = [];
-  nodes.push({ type: 'home',    color: '#F91CDF', flow: 'out', kw: houseKw });
-  nodes.push({ type: 'grid',    color: '#FF4400', flow: gridExporting ? 'out' : 'in', kw: gridExporting ? gridExport : gridKw });
-  if (hasGenBat)       nodes.push({ type: 'genBattery', color: '#55FF00', flow: 'in',  kw: effectiveSolar });
-  if (hasSolarOnly)    nodes.push({ type: 'solar',      color: '#55FF00', flow: 'in',  kw: effectiveSolar });
-  if (showBatteryNode) nodes.push({ type: 'battery',    color: '#FF9234', flow: 'out', kw: 0 });
-  const stopped = mode === 'STOP';
-  for (let i = 0; i < (sels[2] || 0); i++) nodes.push({ type: 'zappi', color: '#0086FF', flow: 'out', kw: zappiKwEach, paused: zappiPaused, stopped });
-  for (let i = 0; i < (sels[3] || 0); i++) nodes.push({ type: 'zappi', color: '#0086FF', flow: 'out', kw: zappiKwEach, paused: zappiPaused, stopped });
-  for (let i = 0; i < (sels[4] || 0); i++) nodes.push({ type: 'eddi',  color: '#00E6C0', flow: 'out', kw: eddiKwEach, stopped });
-  for (let i = 0; i < (sels[5] || 0); i++) nodes.push({ type: 'eddi',  color: '#00E6C0', flow: 'out', kw: eddiKwEach, stopped });
+  // libbi 2 state of charge (illustrative): low overnight, fills through the day
+  const socPts = [[0, 45], [6, 25], [9, 30], [15, 95], [18, 90], [24, 45]];
+  const soc = (() => { for (let i = 1; i < socPts.length; i++) { const [h0, v0] = socPts[i - 1], [h1, v1] = socPts[i]; if (hr <= h1) return Math.round(v0 + (v1 - v0) * (hr - h0) / (h1 - h0)); } return 45; })();
+
+  // Build nodes, clockwise from top centre: Home, Grid, Solar, Solar &
+  // Battery (hybrid), AC coupled battery, then the myenergi devices from the
+  // lowest priority up, so priority 1 sits just left of the home.
+  const deviceNode = u => {
+    const t = typeOf(u);
+    if (t === 'libbi') return { key: u, type: 'libbi', color: '#FF9234', flow: batDischarge > 0 ? 'in' : 'out', kw: batDischarge || batCharge, soc, stopped: lm === 'STOP' };
+    if (t === 'eddi') return { key: u, type: 'eddi', color: '#00E6C0', flow: 'out', kw: kwOf[u], stopped: em === 'STOP' };
+    return { key: u, type: 'zappi', color: '#0086FF', flow: 'out', kw: kwOf[u], paused: !!pausedOf[u], stopped: t === 'zappi' && zm === 'STOP' };
+  };
+  const nodes = [{ key: 'home', type: 'home', color: '#F91CDF', flow: 'out', kw: houseKw }];
+  nodes.push({ key: 'grid', type: 'grid', color: '#FF4400', flow: gridExporting ? 'out' : 'in', kw: gridExporting ? gridExport : gridKw });
+  if (hasSolarOnly)    nodes.push({ key: 'solar', type: 'solar', color: '#55FF00', flow: 'in', kw: effectiveSolar });
+  if (hasGenBat)       nodes.push({ key: 'genBattery', type: 'genBattery', color: '#55FF00', flow: 'in', kw: effectiveSolar });
+  if (showBatteryNode) nodes.push({ key: 'battery', type: 'battery', color: '#FF9234', flow: 'out', kw: 0 });
+  nodes.push(...pGroups.flat().map(deviceNode).reverse());
+
+  // Spokes sweep to their new angles, like clock hands, when the order changes
+  const targetAngle = Object.fromEntries(nodes.map((nd, i) => [nd.key, (i * 2 * Math.PI) / nodes.length]));
+  const orderSig = nodes.map(n => n.key).join('|');
+  useEffect(() => {
+    const from = { ...anglesRef.current };
+    const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    const deltas = Object.fromEntries(Object.entries(targetAngle).map(([k, to]) => {
+      const start = from[k] ?? to;
+      let d = (to - start) % (2 * Math.PI);
+      if (d > Math.PI) d -= 2 * Math.PI; if (d < -Math.PI) d += 2 * Math.PI;
+      return [k, [start, d]];
+    }));
+    if (reduce || Object.values(deltas).every(([, d]) => Math.abs(d) < 1e-6)) {
+      anglesRef.current = { ...targetAngle }; setSpin(t => t + 1); return;
+    }
+    const DUR = 650, t0 = performance.now();
+    let raf;
+    const step = now => {
+      const t = Math.min(1, (now - t0) / DUR), e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+      anglesRef.current = Object.fromEntries(Object.entries(deltas).map(([k, [a, d]]) => [k, a + d * e]));
+      setSpin(x => x + 1);
+      if (t < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [orderSig]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const HX = 187, HY = 352, R = 125;
-  const placed = nodes.map((nd, i) => {
-    const rad = (i * 2 * Math.PI) / nodes.length;
+  const placed = nodes.map(nd => {
+    const rad = anglesRef.current[nd.key] ?? targetAngle[nd.key];
     return { ...nd, cx: HX + R * Math.sin(rad), cy: HY - R * Math.cos(rad) };
   });
 
@@ -641,24 +928,9 @@ function AppPreview({ cfg, result, monitorSolar = true, monitorBattery = true, z
     ? { x: nd.cx, y: nd.cy - 46, anchor: 'middle' }
     : { x: nd.cx, y: nd.cy + 56, anchor: 'middle' };
 
-  const MODE_COLORS = {
-    'ECO':   { bg: '#FFCC00', fg: '#000' },
-    'ECO+':  { bg: '#40ff7a', fg: '#000' },
-    'FAST':  { bg: '#0086FF', fg: '#fff' },
-    'BOOST': { bg: '#0086FF', fg: '#fff' },
-    'STOP':  { bg: '#FF008C', fg: '#fff' },
-  };
-  const MODE_DESC = {
-    'ECO':   "Charges using surplus solar — tops up from the grid when there isn't enough generation. Charging starts as soon as the EV is plugged in.",
-    'ECO+':  "Charges only when surplus solar is sufficient — pauses automatically when generation drops, and resumes when it recovers. Avoids any grid import.",
-    'FAST':  "Charges at full speed using grid power, up to 7.4 kW (1ph) or 22 kW (3ph) — limited only by the EV's onboard charger or any configured device/grid limits.",
-    'BOOST': "Forces maximum power immediately, overriding ECO/ECO+ — zappi charges the EV at full speed and eddi diverts power to the connected appliance at maximum rate. Boosts can be triggered manually or set to a schedule.",
-    'STOP':  "Stops all myenergi devices — surplus solar exports to the grid rather than being used for charging or heating.",
-  };
-
   return (
     <>
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'center', gap: 16, width: '100%' }}>
       <svg viewBox="0 0 375 667" style={{ width: 210, display: "block", borderRadius: 12 }}>
         {/* background */}
         <rect width="375" height="667" fill="#1a1a1a"/>
@@ -720,13 +992,26 @@ function AppPreview({ cfg, result, monitorSolar = true, monitorBattery = true, z
           const kp = kwPos(nd);
           const icon = ICON_PATHS[iconType];
           return (
-            <g key={i}>
+            <g key={nd.key}>
               <circle cx={nd.cx} cy={nd.cy} r="31" fill="#303030" stroke={nd.color} strokeWidth="2"/>
+              {nd.type === 'libbi' ? (
+                <g>
+                  {/* libbi 2: battery whose white bars show state of charge */}
+                  <rect x={nd.cx - 17} y={nd.cy - 10} width={31} height={20} rx={3} fill="none" stroke="white" strokeWidth={1.8}/>
+                  <rect x={nd.cx + 14} y={nd.cy - 4} width={3.5} height={8} rx={1} fill="white"/>
+                  {[0, 1, 2, 3].map(b => (
+                    <rect key={b} x={nd.cx - 14 + b * 7} y={nd.cy - 7} width={5} height={14} rx={1}
+                      fill="white" opacity={nd.soc > b * 25 ? 1 : 0.15}/>
+                  ))}
+                  <text x={nd.cx} y={nd.cy + 22} textAnchor="middle" fontSize="9" fontWeight="700" fill="white">{nd.soc}%</text>
+                </g>
+              ) : (
               <g transform={`translate(${dx},${dy})`}>
                 <path d={icon.d} fill="white"
                   fillRule={icon.fillRule || "nonzero"}
                   clipRule={icon.fillRule || "nonzero"}/>
               </g>
+              )}
               {nd.type === 'genBattery' && (
                 <g>
                   <circle cx={nd.cx + 13} cy={nd.cy + 13} r="9" fill="#303030"/>
@@ -771,34 +1056,91 @@ function AppPreview({ cfg, result, monitorSolar = true, monitorBattery = true, z
         })}
       </svg>
 
-      {/* Mode buttons */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {Object.entries(MODE_COLORS).map(([m, { bg, fg }]) => (
-          <button key={m} onClick={() => setMode(m)} style={{
-            background: mode === m ? bg : '#232323',
-            color: mode === m ? fg : '#777',
-            border: `1px solid ${mode === m ? bg : '#3a3a3a'}`,
-            borderRadius: 999,
-            padding: '8px 14px',
-            fontSize: 11,
-            fontWeight: 700,
-            cursor: 'pointer',
-            fontFamily: 'inherit',
-            letterSpacing: '0.06em',
-            minWidth: 56,
-          }}>
-            {m}
-          </button>
-        ))}
-      </div>
     </div>
 
-    {/* Mode description */}
-    {MODE_DESC[mode] && (
-      <p style={{ margin: '8px 0 0', fontSize: 12, color: '#aaa', lineHeight: 1.5, maxWidth: 520 }}>
-        {MODE_DESC[mode]}
-      </p>
-    )}
+    {/* Priority + how each device works — one card per device type installed */}
+    {(() => {
+      const LABEL = { zappi: 'zappi', glo: 'GLO', eddi: 'eddi', libbi: 'libbi 2' };
+      const WHAT = {
+        zappi: 'Charges your EV, using spare solar first. The mode sets how much grid power it may use.',
+        glo: 'Charges your EV. With smart charging on it follows spare solar, your schedule and cheaper tariffs.',
+        eddi: 'Sends spare solar into your hot water (or heating) instead of exporting it.',
+        libbi: `Stores spare solar in the battery and powers your home later${cfg.libbi2?.eps ? ', and keeps chosen circuits on in a power cut' : ''}.`,
+      };
+      const shown = pGroups;
+      const keys = shown.flat();
+      const unitLabel = u => `${LABEL[typeOf(u)]}${present[typeOf(u)] > 1 ? ` #${u.split('#')[1]}` : ''}`;
+      const move = (key, to) => {
+        const all = pGroups.map(g => g.filter(k => k !== key)).filter(g => g.length);
+        all.splice(Math.max(0, Math.min(to, all.length)), 0, [key]);
+        setPriority(all);
+      };
+      const share = (key, withKey) => setPriority(pGroups.map(g => g.filter(k => k !== key)).filter(g => g.length).map(g => g.includes(withKey) ? [...g, key] : g));
+      const unshare = key => {
+        const gi = pGroups.findIndex(g => g.includes(key));
+        const out = pGroups.map(g => g.filter(k => k !== key)).filter(g => g.length);
+        out.splice(Math.min(gi + 1, out.length), 0, [key]);
+        setPriority(out);
+      };
+      const btn = { background: '#2a2a2a', border: '1px solid #3a3a3a', color: '#ccc', borderRadius: 6, width: 28, height: 28, cursor: 'pointer', fontSize: 13, fontFamily: 'inherit', padding: 0 };
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, flex: '1 1 260px', minWidth: 0, maxWidth: 520 }}>
+          {keys.length > 1 && (
+            <div>
+              <div style={{ fontSize: 11, color: '#888', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 4, fontWeight: 700 }}>Who gets priority</div>
+              <div style={{ fontSize: 12, color: '#999', marginBottom: 8 }}>Drag to reorder. Drop one device onto another to share equally.</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                {shown.map((g, gi) => (
+                  <div key={g.join('+')}>
+                    <div onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); if (dragKey) move(dragKey, gi); setDragKey(null); }}
+                      style={{ height: dragKey ? 10 : 6, borderRadius: 4, background: dragKey ? 'rgba(64,255,122,0.25)' : 'transparent' }}/>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
+                      <div style={{ width: 26, flexShrink: 0, borderRadius: 8, background: '#40ff7a', color: '#000', fontWeight: 800, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{gi + 1}</div>
+                      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4, padding: g.length > 1 ? 4 : 0, border: g.length > 1 ? '1px dashed #40ff7a' : 'none', borderRadius: 10 }}>
+                        {g.map(k => (
+                          <div key={k} draggable onDragStart={() => setDragKey(k)} onDragEnd={() => setDragKey(null)}
+                            onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); e.stopPropagation(); if (dragKey && dragKey !== k) share(dragKey, k); setDragKey(null); }}
+                            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 8px', background: dragKey === k ? '#3d3d3d' : '#2a2a2a', border: '1px solid #3a3a3a', borderRadius: 8, cursor: 'grab' }}>
+                            <span aria-hidden="true" style={{ color: '#777', fontSize: 14, letterSpacing: -2 }}>⋮⋮</span>
+                            <span style={{ flex: 1, fontSize: 14, fontWeight: 700, color: '#eee' }}>{unitLabel(k)}</span>
+                            {g.length > 1 && <button type="button" style={{ ...btn, width: 'auto', padding: '0 8px', fontSize: 11 }} onClick={() => unshare(k)}>Unshare</button>}
+                            <button type="button" aria-label={`Move ${unitLabel(k)} up`} style={btn} disabled={gi === 0 && g.length === 1} onClick={() => move(k, gi === 0 ? 0 : gi - 1)}>▲</button>
+                            <button type="button" aria-label={`Move ${unitLabel(k)} down`} style={btn} disabled={gi === shown.length - 1 && g.length === 1} onClick={() => move(k, gi + 1)}>▼</button>
+                          </div>
+                        ))}
+                        {g.length > 1 && <div style={{ fontSize: 11, color: '#40ff7a', paddingLeft: 4 }}>Sharing spare solar equally</div>}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <div onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); if (dragKey) move(dragKey, shown.length); setDragKey(null); }}
+                  style={{ height: dragKey ? 10 : 0, borderRadius: 4, background: dragKey ? 'rgba(64,255,122,0.25)' : 'transparent', marginTop: 4 }}/>
+              </div>
+            </div>
+          )}
+
+          {[['zappi', nZappi], ['glo', nGlo], ['eddi', numEddis], ['libbi', hasLibbi ? 1 : 0]].filter(([, n]) => n > 0).map(([dev]) => {
+            const def = DEVICE_MODES[dev], cur = modes[dev];
+            return (
+              <div key={dev} style={{ background: '#222', border: '1px solid #333', borderRadius: 10, padding: '12px 12px 10px' }}>
+                <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>{def.label}</div>
+                <div style={{ fontSize: 12, color: '#bbb', margin: '2px 0 8px', lineHeight: 1.45 }}>{WHAT[dev]}</div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {Object.entries(def.modes).map(([m, { bg, fg }]) => (
+                    <button key={m} type="button" onClick={() => setMode(dev, m)} aria-pressed={cur === m} style={{
+                      background: cur === m ? bg : '#232323', color: cur === m ? fg : '#777',
+                      border: `1px solid ${cur === m ? bg : '#3a3a3a'}`, borderRadius: 999, padding: '7px 13px',
+                      fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '0.06em',
+                    }}>{m}</button>
+                  ))}
+                </div>
+                <p style={{ margin: '8px 0 0', fontSize: 12, color: '#aaa', lineHeight: 1.5 }}>{def.modes[cur].desc}</p>
+              </div>
+            );
+          })}
+        </div>
+      );
+    })()}
     </>
   );
 }
@@ -808,7 +1150,9 @@ export default function App() {
   const [step, setStep] = useState(0);
   const [cfg, setCfg] = useState({
     phase: null, inverters: [], batteries: [], selections: {},
-    eddiAppliances: {},   // { "4": [{app1:"",app2:""}, ...], "5": [...] }
+    eddiAppliances: {}, backupCircuits: [],
+    existing: {}, // { [productId]: true } — already installed: kept in the system design, left off the bill of materials
+    libbi2: DEFAULT_LIBBI2, region: "aunz",
   });
   const [wireless, setWireless] = useState(false);
   const [zappiSinglePhase, setZappiSinglePhase] = useState(false);
@@ -827,15 +1171,12 @@ export default function App() {
   }, [controllerProductId]);
 
   const setPhase = v => setCfg(c => ({ ...c, phase: v }));
+  const setLibbi2 = v => { setCfg(c => ({ ...c, libbi2: v })); if (v.csip) setControllerProductId(6); };
+  const toggleBackupCircuit = circuit => setCfg(c => ({ ...c, backupCircuits: c.backupCircuits.includes(circuit) ? c.backupCircuits.filter(x => x !== circuit) : [...c.backupCircuits, circuit] }));
   const setInverters = fn => setCfg(c => ({ ...c, inverters: fn(c.inverters) }));
   const setBatteries = fn => setCfg(c => {
     const next = fn(c.batteries);
-    const hasLibbi = next.some(b => parseInt(b.id) === 14);
-    const hadLibbi = c.batteries.some(b => parseInt(b.id) === 14);
-    let sel = { ...c.selections };
-    if (hasLibbi && !hadLibbi && !sel[6]) sel[6] = 1;
-    if (!hasLibbi && hadLibbi) sel[6] = 0;
-    return { ...c, batteries: next, selections: sel };
+    return { ...c, batteries: next };
   });
 
   const setEddiAppliance = (prodId, idx, key, val) => {
@@ -858,6 +1199,7 @@ export default function App() {
         .no-print  { display: none !important; }
         .notes-textarea { display: none !important; }
         .notes-print { display: block !important; }
+        .tab-panel { display: block !important; margin-bottom: 18px; }
         #results-page { zoom: 0.72; }
         html { height: 99%; }
         #sb-app {
@@ -884,7 +1226,7 @@ export default function App() {
   const ctrlForcesWireless = cfg.phase === "1ph" && !!(ctrlProdData && result && ctrlProdData.ctsSupported < result.totalCTs);
   const effectiveWireless = wireless || ctrlForcesWireless;
 
-  const STEPS = ["Your Property", "myenergi Devices", "Your Requirements"];
+  const STEPS = ["Your Property", "myenergi Devices", "Your System"];
   const step0ok = !!cfg.phase;
   const step1ok = Object.values(cfg.selections).some(q => q > 0);
 
@@ -927,6 +1269,8 @@ export default function App() {
   const incr = id => {
     const tot = Object.values(cfg.selections).reduce((s,q)=>s+q,0);
     if (tot >= 5) return;
+    const maxQty = PRODUCTS.find(p => p.id === id)?.maxQty;
+    if (maxQty && (cfg.selections[id] || 0) >= maxQty) return;
     setCfg(c => {
       const newSel = { ...c.selections, [id]: (c.selections[id]||0)+1 };
       const newAppl = { ...c.eddiAppliances };
@@ -947,7 +1291,7 @@ export default function App() {
       if ((id === 4 || id === 5) && newQty < (c.eddiAppliances[String(id)]||[]).length) {
         newAppl[String(id)] = (newAppl[String(id)]||[]).slice(0, -1);
       }
-      return { ...c, selections: { ...c.selections, [id]: newQty }, eddiAppliances: newAppl };
+      return { ...c, selections: { ...c.selections, [id]: newQty }, eddiAppliances: newAppl, existing: newQty === 0 ? { ...c.existing, [id]: false } : c.existing };
     });
     if (newQty === 0 && id === controllerProductId) {
       const remaining = PRODUCTS.find(p => p.id !== id && (cfg.selections[p.id]||0) > 0);
@@ -958,19 +1302,36 @@ export default function App() {
   const goToResults = () => setStep(2);
   const resetAll = () => {
     setStep(0);
-    setCfg({ phase: null, inverters: [], batteries: [], selections: {}, eddiAppliances: {} });
+    setCfg({ phase: null, inverters: [], batteries: [], selections: {}, eddiAppliances: {}, backupCircuits: [], existing: {}, libbi2: DEFAULT_LIBBI2, region: "aunz" });
     setWireless(false); setMonitorSolar(true); setMonitorBattery(true); setControllerProductId(2); setMainSwitchSplit(false); setNotes("");
   };
+
+  const [view, setView] = useState("customer");
+  const [tab, setTab] = useState("overview");
+  const [openDesc, setOpenDesc] = useState(null);
+
+  const stepHeader = (n, title, intro) => (
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700 }}>Step {n} of 3</div>
+      <h2 style={{ margin: "4px 0 4px", color: "#fff", fontWeight: 800, fontStyle: "italic", fontSize: 24 }}>{title}</h2>
+      {intro && <p style={{ margin: 0, fontSize: 13, color: MUTED }}>{intro}</p>}
+    </div>
+  );
+  const stickyNav = children => (
+    <div className="no-print" style={{ position: "sticky", bottom: 0, zIndex: 5, margin: "24px -24px 0", padding: "12px 24px calc(12px + env(safe-area-inset-bottom, 0px))", background: "rgba(0,0,0,0.92)", borderTop: `1px solid ${BORDER}`, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+      {children}
+    </div>
+  );
 
   return (
     <div id="sb-app" style={{
       background: DARK, minHeight: "100vh", fontFamily: "'Overpass', sans-serif",
-      color: "#ddd", maxWidth: 660, margin: "0 auto",
+      color: "#ddd", maxWidth: 680, margin: "0 auto",
       colorScheme: "dark",
     }}>
       <link href="https://fonts.googleapis.com/css2?family=Overpass:ital,wght@0,300;0,700;1,800&display=swap" rel="stylesheet"/>
 
-      {/* Tab bar */}
+      {/* Step bar */}
       <div id="step-tabs" style={{ display: "flex", background: DARK, borderBottom: `2px solid ${BORDER}` }}>
         {STEPS.map((s, i) => (
           <div key={i} onClick={() => i < step && setStep(i)} style={{
@@ -981,36 +1342,49 @@ export default function App() {
             textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: i === step ? 700 : 400,
             marginBottom: -2,
           }}>
-            {i < step ? `✓ ${s}` : s}
+            {i < step ? `✓ ${s}` : `${i + 1}. ${s}`}
           </div>
         ))}
       </div>
 
-      <div style={{ padding: 24 }}>
+      <div style={{ padding: "24px 24px 0" }}>
 
-        {/* ── STEP 0 — Your Property ─────────────────────────────────────────── */}
+        {/* ── STEP 1 — Your Property ─────────────────────────────────────────── */}
         {step === 0 && (
-          <div>
-            <h2 style={{ margin: "0 0 4px", color: "#fff", fontWeight: 800, fontStyle: "italic", fontSize: 22 }}>Your Property</h2>
-            <p style={{ margin: "0 0 22px", fontSize: 13, color: MUTED }}>Tell us about your electricity supply and any solar panels already installed.</p>
-
-            <div style={{ marginBottom: 24 }}>
-              <SecLabel>Supply Phase</SecLabel>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {["1ph","2ph","3ph"].map(p => <SelBtn key={p} active={cfg.phase === p} onClick={() => setPhase(p)}>{p}</SelBtn>)}
-              </div>
-              {cfg.phase === "2ph" && <div style={{ marginTop: 10, padding: "10px 14px", background: "rgba(0,119,170,0.06)", border: `1px solid ${BLUE}`, borderRadius: 6, fontSize: 12, color: BLUE }}>ⓘ 2-phase installation is not a standard configuration, which can lead to unexpected device behaviour. We recommend contacting myenergi support before proceeding.</div>}
+          <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+            <div>
+              {stepHeader(1, "Your Property", "Your power supply and any solar or batteries from other brands.")}
+              <InfoNote>
+                Add solar inverters and batteries from other brands here.<br/>
+                Don't add myenergi devices on this page. You'll add those on the next page, including any you already have.
+              </InfoNote>
             </div>
 
-            <div style={{ marginBottom: 24 }}>
-              <SecLabel>Solar Inverters</SecLabel>
+            <div>
+              <SectionHead tip="phase">Power supply</SectionHead>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <PicCard active={cfg.phase === "1ph"} onClick={() => setPhase("1ph")} title="Single phase" sub="Most homes"><PhaseIcon n={1}/></PicCard>
+                <PicCard active={cfg.phase === "3ph"} onClick={() => setPhase("3ph")} title="Three phase" sub="Larger homes and farms"><PhaseIcon n={3}/></PicCard>
+              </div>
+              <button type="button" onClick={() => setPhase("2ph")} style={{ marginTop: 8, background: "none", border: "none", padding: 0, color: cfg.phase === "2ph" ? G_TXT : MUTED, fontSize: 12, textDecoration: "underline", cursor: "pointer", fontFamily: "inherit" }}>
+                {cfg.phase === "2ph" ? "✓ Two phase selected" : "Other: two phase"}
+              </button>
+              {cfg.phase === "2ph" && <div style={{ marginTop: 8 }}><InfoNote tone="warn">Two phase isn't a standard setup. Contact myenergi support before installing.</InfoNote></div>}
+            </div>
+
+            <div>
+              <SectionHead>Region</SectionHead>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {REGIONS.map(r => <SelBtn key={r.id} active={cfg.region === r.id} onClick={() => setCfg(c => ({ ...c, region: r.id, libbi2: { ...c.libbi2, csip: r.id === "aunz" && c.libbi2.csip } }))}>{r.label}</SelBtn>)}
+              </div>
+            </div>
+
+            <div>
+              <SectionHead>Solar (other brands)</SectionHead>
               <div style={{ marginBottom: 8 }}>
-                <Checkbox
-                  checked={cfg.noSolar || false}
+                <Checkbox checked={cfg.noSolar || false}
                   onChange={() => setCfg(c => ({ ...c, noSolar: !c.noSolar, inverters: !c.noSolar ? [] : c.inverters }))}
-                  label="No solar installed on this property"
-                  sub="Skip inverter configuration"
-                />
+                  label="No solar installed yet"/>
               </div>
               {!cfg.noSolar && <>
                 {cfg.inverters.map((inv, i) => (
@@ -1018,15 +1392,12 @@ export default function App() {
                     onChange={updated => setInverters(prev => prev.map((x, j) => j === i ? updated : x))}
                     onRemove={() => setInverters(prev => prev.filter((_, j) => j !== i))}/>
                 ))}
-                {cfg.inverters.length === 0 && <AddBtn onClick={() => setInverters(prev => [...prev, newInv()])}>Add solar inverter</AddBtn>}
-                {cfg.inverters.length > 0 && cfg.inverters.length < 3 && <AddBtn onClick={() => setInverters(prev => [...prev, newInv()])}>Add another inverter</AddBtn>}
+                {cfg.inverters.length < 3 && <AddBtn onClick={() => setInverters(prev => [...prev, newInv()])}>{cfg.inverters.length === 0 ? "Add solar inverter" : "Add another inverter"}</AddBtn>}
               </>}
             </div>
 
-            {/* Standalone Battery — AC coupled only */}
-            <div style={{ marginBottom: 24 }}>
-              <SecLabel>Standalone Battery (AC Coupled)</SecLabel>
-              <p style={{ margin: "0 0 10px", fontSize: 12, color: MUTED }}>For batteries that connect directly to your switchboard. If your battery came bundled with your inverter, add it via the inverter card above.</p>
+            <div>
+              <SectionHead tipText="A battery with its own inverter that connects to the switchboard (AC coupled), such as Tesla Powerwall 2. Batteries that share the solar inverter are added on the solar card above.">Separate battery (other brands)</SectionHead>
               {cfg.batteries.map((bat, i) => (
                 <BatteryCard key={bat.uid} bat={bat}
                   onChange={updated => setBatteries(prev => prev.map((x, j) => j === i ? updated : x))}
@@ -1034,90 +1405,81 @@ export default function App() {
               ))}
               {cfg.batteries.length < 3 && (
                 <AddBtn onClick={() => setBatteries(prev => [...prev, newBat()])}>
-                  {cfg.batteries.length === 0 ? "Add standalone battery" : "Add another battery"}
+                  {cfg.batteries.length === 0 ? "Add battery" : "Add another battery"}
                 </AddBtn>
               )}
             </div>
 
-            <NextBtn onClick={() => setStep(1)} disabled={!step0ok}>Next →</NextBtn>
+            {stickyNav(<>
+              <NextBtn onClick={() => setStep(1)} disabled={!step0ok}>Next: myenergi devices →</NextBtn>
+              {!step0ok && <span style={{ fontSize: 12, color: MUTED }}>Choose your power supply to continue</span>}
+            </>)}
           </div>
         )}
 
-        {/* ── STEP 1 — myenergi Devices ──────────────────────────────────────── */}
+        {/* ── STEP 2 — myenergi Devices ──────────────────────────────────────── */}
         {step === 1 && (() => {
           const totalDevices = Object.values(cfg.selections).reduce((s, q) => s + q, 0);
           const atLimit = totalDevices >= 5;
           return (
             <div>
-              <h2 style={{ margin: "0 0 4px", color: "#fff", fontWeight: 800, fontStyle: "italic", fontSize: 22 }}>myenergi Devices</h2>
-              <p style={{ margin: "0 0 12px", fontSize: 13, color: MUTED }}>Select the myenergi devices being installed. One device acts as the controller — the others run as secondary.</p>
-              <div style={{ marginBottom: 14, fontSize: 13, color: atLimit ? WARN : MUTED }}>
-                Devices selected: <span style={{ fontWeight: 700, color: atLimit ? WARN : G_TXT }}>{totalDevices} / 5</span>
-                {atLimit && <span style={{ marginLeft: 8 }}>— Maximum reached</span>}
+              {stepHeader(2, "myenergi Devices", "Add every myenergi device on site, new or already installed.")}
+              <div style={{ marginBottom: 12, fontSize: 12, color: atLimit ? WARN : MUTED }}>
+                {totalDevices} of 5 devices{atLimit ? " (maximum reached)" : ""}
               </div>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {PRODUCTS.map(p => {
                   const qty = cfg.selections[p.id] || 0;
                   const imgUrl = ICON_URLS[p.name] || ICON_URLS[p.friendlyName];
                   const isActive = qty > 0;
+                  const maxed = atLimit || (p.maxQty && qty >= p.maxQty);
                   return (
                     <div key={p.id}>
                       <div style={{
-                        display: "flex", alignItems: "center", justifyContent: "space-between",
-                        padding: "14px 16px", background: isActive ? "rgba(64,255,122,0.07)" : CARD,
+                        display: "flex", alignItems: "center", gap: 14,
+                        padding: "12px 14px", background: isActive ? "rgba(64,255,122,0.07)" : CARD,
                         border: `1px solid ${isActive ? G : BORDER}`, borderRadius: 10,
                       }}>
-                        {/* Left: thumbnail + info */}
-                        <div style={{ display: "flex", alignItems: "center", gap: 14, flex: 1, minWidth: 0 }}>
-                          {/* Thumbnail */}
-                          <div style={{ width: 52, height: 52, background: CARD, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden", padding: 6, boxSizing: "border-box" }}>
-                            {imgUrl && <img src={imgUrl} alt={p.friendlyName} style={{ width: "100%", height: "100%", objectFit: "contain" }}/>}
-                          </div>
-                          {/* Text */}
-                          <div style={{ minWidth: 0 }}>
-                            <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-                              <span style={{ fontSize: 16, color: isActive ? G_TXT : "#ddd", fontWeight: 700 }}>{p.friendlyName}</span>
-                              <span style={{ fontSize: 12, color: isActive ? G_TXT : MUTED, fontWeight: 600 }}>— {p.tagline}</span>
-                            </div>
-                            <div style={{ fontSize: 12, color: MUTED, marginTop: 3, lineHeight: 1.4 }}>{p.desc}</div>
-                            <div style={{ fontSize: 11, color: MUTED, marginTop: 4 }}>
-                              {p.ctsIncluded} CT{p.ctsIncluded !== 1 ? "s" : ""} included · supports {p.ctsSupported} CT{p.ctsSupported !== 1 ? "s" : ""}
-                            </div>
-                            {isActive && (
-                              <div onClick={() => setControllerProductId(p.id)} style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 6, cursor: "pointer" }}>
-                                <div style={{ width: 12, height: 12, borderRadius: "50%", border: `2px solid ${controllerProductId === p.id ? G : "#bbb"}`, background: controllerProductId === p.id ? G : "transparent", flexShrink: 0 }}/>
-                                <span style={{ fontSize: 11, color: controllerProductId === p.id ? G_TXT : MUTED }}>
-                                  {controllerProductId === p.id ? "Controller (receives CTs)" : "Set as controller"}
-                                </span>
-                              </div>
-                            )}
-                          </div>
+                        <div style={{ width: 56, height: 56, background: "#ececec", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden", padding: 6, boxSizing: "border-box" }}>
+                          {imgUrl && <img src={imgUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }}/>}
                         </div>
-                        {/* Right: qty controls */}
-                        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0, marginLeft: 12 }}>
-                          <button onClick={() => decr(p.id)} style={{ background: "#2a2a2a", border: "none", color: "#ccc", borderRadius: 999, width: 30, height: 30, cursor: "pointer", fontSize: 18, lineHeight: 1, fontFamily: "inherit" }}>−</button>
-                          <span style={{ width: 22, textAlign: "center", fontSize: 15, color: isActive ? G_TXT : MUTED, fontWeight: 700 }}>{qty}</span>
-                          <button onClick={() => incr(p.id)} style={{ background: atLimit ? "#333" : G, border: "none", color: atLimit ? "#666" : "#000", borderRadius: 999, width: 30, height: 30, cursor: atLimit ? "not-allowed" : "pointer", fontSize: 18, lineHeight: 1, fontFamily: "inherit" }}>+</button>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 17, color: isActive ? G_TXT : "#fff", fontWeight: 800, lineHeight: 1.2 }}>
+                            {p.friendlyName}
+                            <button type="button" aria-label={`About ${p.friendlyName}`} aria-expanded={openDesc === p.id} onClick={() => setOpenDesc(o => o === p.id ? null : p.id)}
+                              style={{ marginLeft: 6, width: 18, height: 18, borderRadius: 999, border: "1px solid #666", background: "transparent", color: "#aaa", fontSize: 11, fontWeight: 700, padding: 0, cursor: "pointer", fontFamily: "Georgia, serif", verticalAlign: "middle" }}>i</button>
+                          </div>
+                          <div style={{ fontSize: 13, color: isActive ? G_TXT : MUTED }}>{p.tagline}</div>
+                          {isActive && (
+                            <label style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 6, fontSize: 12, color: cfg.existing[p.id] ? "#fff" : MUTED, cursor: "pointer" }}>
+                              <input type="checkbox" checked={!!cfg.existing[p.id]} onChange={() => setCfg(c => ({ ...c, existing: { ...c.existing, [p.id]: !c.existing[p.id] } }))} style={{ accentColor: G }}/>
+                              Already installed{qty > 1 ? " (all units)" : ""}
+                            </label>
+                          )}
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                          <button type="button" aria-label={`Remove ${p.friendlyName}`} onClick={() => decr(p.id)} disabled={qty === 0} style={{ background: "#2a2a2a", border: "none", color: qty ? "#ccc" : "#555", borderRadius: 999, width: 34, height: 34, cursor: qty ? "pointer" : "default", fontSize: 18, lineHeight: 1, fontFamily: "inherit" }}>−</button>
+                          <span style={{ width: 18, textAlign: "center", fontSize: 16, color: isActive ? G_TXT : MUTED, fontWeight: 800 }}>{qty}</span>
+                          <button type="button" aria-label={`Add ${p.friendlyName}`} onClick={() => incr(p.id)} disabled={maxed} style={{ background: maxed ? "#333" : G, border: "none", color: maxed ? "#666" : "#000", borderRadius: 999, width: 34, height: 34, cursor: maxed ? "not-allowed" : "pointer", fontSize: 18, lineHeight: 1, fontFamily: "inherit" }}>+</button>
                         </div>
                       </div>
+                      {openDesc === p.id && <div style={{ margin: "6px 4px 0", fontSize: 12, color: "#bbb", lineHeight: 1.5 }}>{p.desc}</div>}
 
-                      {/* Eddi appliance selector — shown per unit when qty > 0 */}
+                      {p.id === 6 && qty > 0 && (
+                        <Libbi2Panel value={cfg.libbi2} onChange={setLibbi2} region={cfg.region} phase={cfg.phase}
+                          thirdPartyCount={cfg.noSolar ? 0 : cfg.inverters.filter(i => i.brand).length}
+                          backupCircuits={cfg.backupCircuits} onToggleCircuit={toggleBackupCircuit}/>
+                      )}
+
                       {p.hasAppliances && qty > 0 && (
                         <div style={{ marginTop: 2, paddingLeft: 4 }}>
                           {Array.from({ length: qty }).map((_, idx) => {
                             const prodKey = String(p.id);
                             const entry = (cfg.eddiAppliances[prodKey] || [])[idx] || { app1: "", app2: "" };
                             return (
-                              <EddiApplianceSelector
-                                key={idx}
-                                unit={p.friendlyName}
-                                idx={idx}
-                                onChange={{
-                                  data: entry,
-                                  set: (key, val) => setEddiAppliance(prodKey, idx, key, val),
-                                }}
-                              />
+                              <EddiApplianceSelector key={idx} unit={p.friendlyName} idx={idx}
+                                onChange={{ data: entry, set: (key, val) => setEddiAppliance(prodKey, idx, key, val) }}/>
                             );
                           })}
                         </div>
@@ -1127,245 +1489,291 @@ export default function App() {
                 })}
               </div>
 
-              <div style={{ display: "flex", gap: 10 }}>
+              {stickyNav(<>
                 <BackBtn onClick={() => setStep(0)}/>
-                <NextBtn onClick={goToResults} disabled={!step1ok}>View Results →</NextBtn>
-              </div>
+                <NextBtn onClick={goToResults} disabled={!step1ok}>See my system →</NextBtn>
+                {!step1ok && <span style={{ fontSize: 12, color: MUTED }}>Add at least one device</span>}
+              </>)}
             </div>
           );
         })()}
 
-        {/* ── STEP 2 — Your Requirements ─────────────────────────────────────── */}
+        {/* ── STEP 3 — Your System ───────────────────────────────────────────── */}
         {step === 2 && result && (() => {
           const harviTotal = result.harvisNeeded + (effectiveWireless && cfg.phase === "1ph" ? 1 : 0) + (zappiSinglePhase && cfg.phase === "3ph" ? 1 : 0);
           const showZappiSinglePhase = cfg.phase === "3ph" && result.selProds.some(p => p.id === 2 && p.qty > 0);
-          const hasBatteryForSplit = result.hasAcBat || cfg.inverters.some(i => i.hasCoupledBat);
+          const hasNewLibbi = (cfg.selections[6] || 0) > 0;
+          const hasBatteryForSplit = result.hasAcBat || hasNewLibbi || cfg.inverters.some(i => i.hasCoupledBat);
+          const l2 = hasNewLibbi ? libbi2Summary(cfg.libbi2) : null;
+          const thirdPartyInverters = cfg.noSolar ? [] : cfg.inverters.filter(i => i.brand);
+          const protection = protectionRows(cfg, result.selProds, harviTotal);
           const diagramConfig = buildDiagramConfig(cfg, effectiveWireless, monitorSolar, monitorBattery, controllerProductId, zappiSinglePhase, mainSwitchSplit);
           const plainEnglish = generatePlainEnglish(result, ctConfig, effectiveWireless, cfg, harviTotal);
+          const newProds = result.selProds.filter(p => !cfg.existing[p.id]);
+          const existingProds = result.selProds.filter(p => cfg.existing[p.id]);
+          const itemsToOrder = newProds.reduce((s, p) => s + p.qty, 0) + harviTotal + result.additionalCTs;
+          const isInstaller = view === "installer";
+          // Customer view is the app preview only; the installer view adds
+          // the design, bill of materials and wiring detail.
+          const TABS = isInstaller ? [
+            { id: "overview", label: "Overview" },
+            { id: "shopping", label: "Bill of Materials" },
+            { id: "app", label: "App preview" },
+            ...(hasNewLibbi ? [{ id: "install", label: "libbi 2 install" }] : []),
+            { id: "protection", label: "Circuit protection" },
+            { id: "ct", label: "CT routing" },
+          ] : [{ id: "app", label: "App preview" }];
+          const activeTab = TABS.some(t => t.id === tab) ? tab : TABS[0].id;
+          const batteryIds = [
+            ...cfg.inverters.filter(i => i.brand && i.hasCoupledBat && i.coupledBatId).map(i => i.coupledBatId),
+            ...cfg.batteries.filter(b => b.id).map(b => b.id),
+          ].map(id => parseInt(id));
+          const seen = new Set();
+          const hasThirdPartyHybrid = thirdPartyInverters.some(i => i.hasCoupledBat);
+          const articles = [
+            ...(hasThirdPartyHybrid ? [HYBRID_ARTICLE] : []),
+            ...batteryIds.flatMap(id => batterySupportArticles(id)).filter(a => a !== GENERAL_BATTERY_ARTICLE),
+            ...(batteryIds.length ? [GENERAL_BATTERY_ARTICLE] : []),
+          ].filter(a => !seen.has(a.url) && seen.add(a.url));
+          const stat = (value, label, col, tip) => (
+            <div style={{ padding: "14px 8px", background: CARD, borderRadius: 10, border: `1px solid ${BORDER}`, textAlign: "center", minWidth: 0 }}>
+              <div style={{ fontSize: 34, fontWeight: 800, color: col, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{value}</div>
+              <div style={{ fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 6 }}>{label}{tip && <Tip term={tip}/>}</div>
+            </div>
+          );
+          const panelStyle = id => ({ display: activeTab === id ? "block" : "none" });
+          const chip = (text, col = "#ccc") => <span style={{ background: "#262626", padding: "3px 9px", borderRadius: 999, color: col }}>{text}</span>;
+
           return (
-            <div id="results-page">
-              <h2 style={{ margin: "0 0 16px", color: "#fff", fontWeight: 800, fontStyle: "italic", fontSize: 22 }}>Your Requirements</h2>
-              {result.is2ph && <div style={{ marginBottom: 16, padding: "12px 14px", background: "rgba(0,119,170,0.06)", border: `1px solid ${BLUE}`, borderRadius: 6, fontSize: 12, color: BLUE }}>ⓘ 2-phase installation is not a standard configuration. We recommend contacting myenergi support before proceeding.</div>}
-
-              {/* Summary chips */}
-              <div style={{ marginBottom: 20, padding: "10px 14px", background: CARD, borderRadius: 8, border: `1px solid ${BORDER}`, fontSize: 12, display: "flex", flexWrap: "wrap", gap: 6 }}>
-                <span style={{ background: CARD, padding: "2px 8px", borderRadius: 4, color: "#ccc" }}>{cfg.phase}</span>
-                {cfg.inverters.filter(i=>i.brand).map((inv,i)=>{
-                  const cb = inv.hasCoupledBat && inv.coupledBatId ? DC_BATTERIES.find(b=>b.id===parseInt(inv.coupledBatId)) : null;
-                  return <span key={i} style={{ background: CARD, padding: "2px 8px", borderRadius: 4, color: "#ccc" }}>{inv.brand}{cb ? ` + ${cb.label}` : ""}{inv.phase ? ` (${inv.phase})` : ""}</span>;
-                })}
-                {cfg.batteries.filter(b=>b.id).map((bat,i)=>{ const f=AC_BATTERIES.find(x=>x.id===parseInt(bat.id)); return <span key={i} style={{ background: CARD, padding: "2px 8px", borderRadius: 4, color: "#ccc" }}>{f?.label} (AC)</span>; })}
-              </div>
-
-              {/* Monitoring options */}
-              {result.hasAcBat && (
-                <div style={{ marginBottom: 16, fontSize: 13 }}>
-                  <SecLabel>Monitoring Options</SecLabel>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    <Checkbox checked={monitorBattery} onChange={() => setMonitorBattery(m => !m)} label="Monitor battery output" sub="Shows battery charge/discharge on your myenergi device + app. Solar-aware charging is not impacted."/>
-                  </div>
-                </div>
-              )}
-
-              {/* Controller device */}
-              {result.selProds.length > 1 && (
-                <div style={{ marginBottom: 16 }}>
-                  <SecLabel>Controller Device</SecLabel>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 6 }}>
-                    {result.selProds.map(p => (
-                      <div key={p.id} onClick={() => setControllerProductId(p.id)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", background: controllerProductId === p.id ? G : CARD, border: `1px solid ${controllerProductId === p.id ? G : BORDER}`, borderRadius: 20, cursor: "pointer" }}>
-                        <div style={{ width: 10, height: 10, borderRadius: "50%", border: `2px solid ${controllerProductId === p.id ? "#000" : "#bbb"}`, background: controllerProductId === p.id ? "#000" : "transparent", flexShrink: 0 }}/>
-                        <span style={{ fontSize: 11, color: controllerProductId === p.id ? "#000" : "#aaa", fontWeight: controllerProductId === p.id ? 700 : 400 }}>{p.friendlyName || p.name}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{ fontSize: 12, color: MUTED }}>The controller receives CT inputs. Other devices run as secondary.</div>
-                </div>
-              )}
-
-              {/* myenergi App Preview */}
-              <div style={{ marginBottom: 24 }}>
-                <SecLabel>myenergi App Preview</SecLabel>
-                <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, overflow: "hidden" }}>
-                  <div style={{ padding: "14px 16px", borderBottom: `1px solid ${BORDER}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: "#ddd" }}>myenergi App</div>
-                      <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>How your system will appear in the app</div>
-                    </div>
-                    <div style={{ fontSize: 11, color: MUTED, background: CARD, padding: "3px 8px", borderRadius: 4 }}>Preview</div>
-                  </div>
-                  <div style={{ padding: "20px 16px 16px", background: "#111", display: "flex", justifyContent: "center" }}>
-                    <AppPreview cfg={cfg} result={result} monitorSolar={monitorSolar} monitorBattery={monitorBattery} zappiSinglePhase={zappiSinglePhase}/>
-                  </div>
+            <div id="results-page" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              <div>
+                {stepHeader(3, "Your System")}
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, fontSize: 12 }}>
+                  {chip(cfg.phase === "3ph" ? "Three phase" : cfg.phase === "2ph" ? "Two phase" : "Single phase")}
+                  {thirdPartyInverters.map((inv, i) => {
+                    const cb = inv.hasCoupledBat && inv.coupledBatId ? DC_BATTERIES.find(b => b.id === parseInt(inv.coupledBatId)) : null;
+                    return <span key={`i${i}`}>{chip(`${inv.brand}${cb && cb.id !== 99 ? ` + ${cb.label}` : ""}`)}</span>;
+                  })}
+                  {cfg.batteries.filter(b => b.id).map((bat, i) => { const f = AC_BATTERIES.find(x => x.id === parseInt(bat.id)); return <span key={`b${i}`}>{chip(f?.label)}</span>; })}
+                  {l2 && chip(`libbi 2 · ${l2.capacityKWh} kWh${cfg.libbi2.eps ? " · backup" : ""}`, G_TXT)}
+                  {existingProds.map(p => <span key={`e${p.id}`}>{chip(`${p.friendlyName} (existing)`, "#999")}</span>)}
                 </div>
               </div>
 
-              {/* Monitor solar generation */}
-              {result.hasSolar && (
-                <div style={{ marginBottom: 20 }}>
-                  <Checkbox checked={monitorSolar} onChange={() => setMonitorSolar(m => !m)} label="Monitor solar generation" sub="Required to see self-consumption % and solar output on your myenergi device + app. Solar-aware charging is not impacted."/>
-                </div>
-              )}
+              {/* View switch */}
+              <div className="no-print" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <ViewSwitch view={view} onChange={setView}/>
+                <span style={{ fontSize: 12, color: MUTED }}>{isInstaller ? "Design, materials and wiring detail" : "Installers: switch for the full design"}</span>
+              </div>
 
-              {/* zappi single-phase on 3-phase supply */}
-              {showZappiSinglePhase && (
-                <div style={{ marginBottom: 20 }}>
-                  <Checkbox
-                    checked={zappiSinglePhase}
-                    onChange={() => setZappiSinglePhase(z => !z)}
-                    label="zappi wired single phase on a 3-phase supply"
-                    sub="Tick if the zappi will be connected to one phase only, despite the property having a 3-phase supply"
-                    color={YELLOW}
-                  />
-                  {zappiSinglePhase && (
-                    <div style={{ marginTop: 8, padding: "10px 14px", background: "rgba(160,104,0,0.06)", border: `1px solid rgba(160,104,0,0.3)`, borderRadius: 6, fontSize: 12, color: YELLOW, lineHeight: 1.55 }}>
-                      ⚠ When a 3-phase capable device is wired to a single phase, it can only see power on that one phase. A harvi is required to monitor all three phases wirelessly and net the total import/export across all phases — ensuring accurate solar-aware charging and correct energy readings in the app.
-                    </div>
+              {!isInstaller && (
+                <p style={{ margin: 0, fontSize: 14, color: "#ccc", lineHeight: 1.5 }}>
+                  This is how your system will look in the myenergi app. Try each device's modes, and set which device uses spare solar first.
+                </p>
+              )}
+              {!isInstaller && (thirdPartyInverters.length > 0 || l2?.hasPv || result.hasAcBat) && (
+                <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "2px 16px" }}>
+                  {(thirdPartyInverters.length > 0 || l2?.hasPv) && (
+                    <ToggleRow checked={monitorSolar} onChange={() => setMonitorSolar(m => !m)} label="Show my solar in the app" tip="monitor"/>
+                  )}
+                  {result.hasAcBat && (
+                    <ToggleRow checked={monitorBattery} onChange={() => setMonitorBattery(m => !m)} label="Show my other battery in the app" tip="monitor"/>
                   )}
                 </div>
               )}
 
-              {/* Wiring Diagram */}
-              <div style={{ marginBottom: 24, marginLeft: -48, marginRight: -48 }}>
-                <div style={{ fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8, paddingLeft: 48 }}>Wiring Diagram</div>
-                <div style={{ padding: "0 54px" }}>
-                  <Diagram config={diagramConfig} />
-                </div>
+              {/* Summary (installer) */}
+              {isInstaller && <>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10 }}>
+                {stat(itemsToOrder, "Items to order", "#fff")}
+                {stat(result.totalCTs, "CT clamps", "#fff", "CT")}
+                {stat(harviTotal, "harvi", harviTotal > 0 ? YELLOW : MUTED, "harvi")}
               </div>
+              {result.is2ph && <InfoNote tone="warn">Two phase isn't a standard setup. Contact myenergi support before installing.</InfoNote>}
+              {hasNewLibbi && cfg.libbi2.csip && controllerProductId !== 6 && <InfoNote tone="warn">On a CSIP-AUS site, libbi 2 must be the controller. Change it under Adjust design.</InfoNote>}
 
-              {/* Wireless CT */}
-              {cfg.phase === "1ph" && !ctrlForcesWireless && (
-                <div style={{ marginBottom: 20 }}>
-                  <Checkbox checked={wireless} onChange={() => setWireless(w => !w)} label="Use wireless CT connection (harvi)" sub="Tick if CTs will connect via harvi instead of directly to the myenergi device" color={YELLOW}/>
-                </div>
-              )}
-              {cfg.phase === "1ph" && ctrlForcesWireless && (
-                <div style={{ marginBottom: 20, padding: "10px 14px", background: "rgba(160,104,0,0.06)", border: `1px solid rgba(160,104,0,0.3)`, borderRadius: 6, fontSize: 12, color: YELLOW }}>
-                  ⚠ Wireless CT connection (harvi) is required — the selected controller device only supports 2 CT inputs.
-                </div>
-              )}
-
-              {/* myenergi device split from battery-fed supply */}
-              {hasBatteryForSplit && (
-                <div style={{ marginBottom: 20 }}>
-                  <Checkbox
-                    checked={mainSwitchSplit}
-                    onChange={() => setMainSwitchSplit(s => !s)}
-                    label="Allow the myenergi device to charge from grid without drawing from the battery"
-                    sub="Useful if you're on a cheap overnight grid tariff and want to charge without the home battery discharging to cover it."
-                    color={YELLOW}
-                  />
-                  {mainSwitchSplit && (
-                    <div style={{ marginTop: 8, padding: "10px 14px", background: "rgba(160,104,0,0.06)", border: `1px solid rgba(160,104,0,0.3)`, borderRadius: 6, fontSize: 12, color: YELLOW, lineHeight: 1.55 }}>
-                      <p style={{ margin: "0 0 8px" }}>⚠ Achieved by wiring the myenergi device on its own circuit, separate from the battery-fed property supply, so the battery's own system never sees it as a load to cover. In GB, this split is commonly made with a Henley block at the meter tails. In AU/NZ, Henley blocks aren't used for this — the load side of the main switch is split instead. Confirm the correct method and equipment for your region with local wiring rules. The myenergi grid CT stays positioned before the split so it still reads total site import/export for zero-export control; a separate CT on the property side (fitted by the inverter/battery installer) monitors only the property's own load.</p>
-                      <p style={{ margin: 0 }}>Alternatively, the same outcome can be reached without rewiring — by scheduling the battery and the myenergi device to charge from grid at the same time. Check with your battery installer or manufacturer on how to configure this.</p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Stat boxes */}
-              <div style={{ display: "flex", gap: 10, marginBottom: 24 }}>
-                {statBox("CTs Required", result.totalCTs, "#fff")}
-                {statBox("CTs Included", result.ctsIncluded, "#fff")}
-                {statBox("Additional CTs", result.additionalCTs, result.additionalCTs > 0 ? WARN : MUTED)}
-                {statBox("harvis Required", harviTotal, harviTotal > 0 ? YELLOW : MUTED)}
-              </div>
-
-              {/* CT Requirements table */}
-              <div style={{ marginBottom: 20 }}>
-                <SecLabel>CT Requirements</SecLabel>
-                <div style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead><tr>
-                      <th style={th}>Component</th>
-                      <th style={{ ...th, textAlign: "center", width: 50 }}>CTs</th>
-                      <th style={th}>CT Type</th>
-                      <th style={th}>Input</th>
-                      <th style={th}>Routing</th>
-                    </tr></thead>
-                    <tbody>
-                      {ctConfig.map((row, i) => (
-                        <React.Fragment key={i}>
-                          <tr>
-                            <td style={{ ...tdr(i), color: "#ccc", fontSize: 13 }}>{row.component}</td>
-                            <td style={{ ...tdr(i), textAlign: "center", color: G_TXT, fontWeight: 700 }}>{row.cts}</td>
-                            <td style={{ ...tdr(i), color: BLUE }}>{row.type}</td>
-                            <td style={{ ...tdr(i), color: row.routing === "harvi" ? YELLOW : MUTED }}>{row.input}</td>
-                            <td style={{ ...tdr(i), color: row.routing === "harvi" ? YELLOW : MUTED }}>
-                              {row.routing === "harvi" && effectiveWireless && cfg.phase === "1ph" ? `→ wire to harvi, pair with ${result.master?.name || "myenergi device"}` : row.routing === "harvi" ? "→ harvi" : "→ wire to myenergi device"}
-                            </td>
-                          </tr>
-                          {row.note && <tr><td colSpan={5} style={{ padding: "6px 10px 10px", background: i % 2 === 0 ? CARD : "#1a1a1a", borderBottom: `1px solid ${BORDER}` }}><div style={{ padding: "7px 10px", background: "rgba(160,104,0,0.06)", border: "1px solid rgba(160,104,0,0.25)", borderRadius: 5, fontSize: 11, color: YELLOW }}>⚠ {row.note}</div></td></tr>}
-                        </React.Fragment>
-                      ))}
-                      <tr>
-                        <td style={{ padding: "8px 10px", color: "#fff", fontWeight: 700, borderTop: `2px solid ${BORDER}`, fontSize: 13 }}>Total</td>
-                        <td style={{ padding: "8px 10px", textAlign: "center", color: G_TXT, fontWeight: 700, borderTop: `2px solid ${BORDER}`, fontSize: 13 }}>{result.totalCTs}</td>
-                        <td colSpan={3} style={{ borderTop: `2px solid ${BORDER}` }}/>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Plain-English translation */}
-              <div style={{ marginBottom: 20, padding: "14px 16px", background: "rgba(64,255,122,0.06)", border: `1px solid rgba(64,255,122,0.25)`, borderRadius: 8 }}>
-                <div style={{ fontSize: 12, color: G_TXT, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>In Plain English</div>
+              <div style={{ padding: "14px 16px", background: CARD, borderRadius: 10, border: `1px solid ${BORDER}`, display: "flex", flexDirection: "column", gap: 6 }}>
                 {plainEnglish.map((line, i) => (
-                  <p key={i} style={{ margin: "0 0 6px", fontSize: 13, color: "#ccc", lineHeight: 1.55 }}>{line}</p>
+                  <p key={i} style={{ margin: 0, fontSize: 13, color: "#ccc", lineHeight: 1.55 }}>{line}</p>
                 ))}
               </div>
+              </>}
+
+              {/* Tabs (installer) */}
+              {isInstaller && <div className="no-print" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <div role="tablist" style={{ display: "flex", gap: 4, overflowX: "auto", borderBottom: `1px solid ${BORDER}` }}>
+                  {TABS.map(t => (
+                    <button key={t.id} role="tab" type="button" aria-selected={activeTab === t.id} onClick={() => setTab(t.id)}
+                      style={{ flexShrink: 0, background: "none", border: "none", borderBottom: `2px solid ${activeTab === t.id ? G : "transparent"}`, color: activeTab === t.id ? G_TXT : "#aaa", padding: "9px 12px", fontSize: 13, fontWeight: activeTab === t.id ? 700 : 400, cursor: "pointer", fontFamily: "inherit", marginBottom: -1 }}>
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </div>}
+
+              {/* Overview */}
+              {isInstaller && <div className="tab-panel" data-active={activeTab === "overview"} style={panelStyle("overview")}>
+                <SectionHead>Wiring diagram</SectionHead>
+                <Zoomable label="wiring diagram"><Diagram config={diagramConfig}/></Zoomable>
+                {isInstaller && <ConductorKey region={cfg.region} phase={cfg.phase}/>}
+                {articles.length > 0 && (
+                  <div style={{ marginTop: 18 }}>
+                    <SectionHead>Helpful articles</SectionHead>
+                    {articles.map(a => (
+                      <a key={a.url} href={a.url} target="_blank" rel="noopener noreferrer"
+                        style={{ display: "block", fontSize: 13, color: BLUE, lineHeight: 1.7, textDecoration: "underline" }}>{a.title} ↗</a>
+                    ))}
+                  </div>
+                )}
+              </div>}
 
               {/* Bill of Materials */}
-              <div style={{ marginBottom: 24 }}>
-                <SecLabel>Bill of Materials</SecLabel>
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                  <thead><tr>
-                    <th style={th}>Item</th>
-                    <th style={{ ...th, textAlign: "center", width: 60 }}>Qty</th>
-                  </tr></thead>
-                  <tbody>
-                    {result.selProds.map((p, i) => (
-                      <tr key={i}>
-                        <td style={tdr(i)}><div style={{ display: "flex", alignItems: "center", gap: 10 }}><Icon name={p.name}/><div><div style={{ color: "#ddd", fontSize: 14 }}>{p.friendlyName || p.name}</div><div style={{ color: MUTED, fontSize: 12 }}>{p.tagline || ""}</div></div></div></td>
-                        <td style={{ ...tdr(i), textAlign: "center", color: "#fff", fontWeight: 700 }}>{p.qty}</td>
-                      </tr>
-                    ))}
-                    {harviTotal > 0 && (() => { const i = result.selProds.length; return (
-                      <tr><td style={tdr(i)}><div style={{ display: "flex", alignItems: "center", gap: 10 }}><Icon name="harvi"/><div><div style={{ color: "#ddd", fontSize: 14 }}>harvi</div><div style={{ color: MUTED, fontSize: 12 }}>Wireless CT Transmitter</div></div></div></td><td style={{ ...tdr(i), textAlign: "center", color: YELLOW, fontWeight: 700 }}>{harviTotal}</td></tr>
-                    ); })()}
-                    {result.additionalCTs > 0 && (() => { const i = result.selProds.length + (harviTotal > 0 ? 1 : 0); return (
-                      <tr><td style={{ ...tdr(i), color: "#333" }}>Additional CT clamps</td><td style={{ ...tdr(i), textAlign: "center", color: WARN, fontWeight: 700 }}>{result.additionalCTs}</td></tr>
-                    ); })()}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Notes */}
-              <div style={{ marginBottom: 32 }}>
-                <div style={{ fontSize: 10, color: MUTED, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>Notes</div>
-                <textarea
-                  className="notes-textarea"
-                  value={notes}
-                  onChange={e => setNotes(e.target.value)}
-                  placeholder="Add notes here…"
-                  style={{ width: "100%", minHeight: 100, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 6, color: "#ddd", padding: "10px 12px", fontSize: 14, fontFamily: "inherit", resize: "vertical", boxSizing: "border-box" }}
-                />
-                <div className="notes-print" style={{ display: "none", whiteSpace: "pre-wrap", wordBreak: "break-word", fontSize: 12, lineHeight: 1.5, border: "1px solid #ccc", borderRadius: 6, padding: "10px 12px", minHeight: 60 }}>
-                  {notes || "—"}
+              {isInstaller && <div className="tab-panel" data-active={activeTab === "shopping"} style={panelStyle("shopping")}>
+                <SectionHead>Bill of Materials</SectionHead>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {newProds.map(p => (
+                    <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", background: CARD, borderRadius: 10 }}>
+                      <Icon name={p.name}/>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ color: "#fff", fontSize: 15, fontWeight: 700 }}>{p.friendlyName}</div>
+                        <div style={{ color: MUTED, fontSize: 12 }}>{p.id === 6 && l2 ? `${l2.inverter.label} inverter · ${l2.modules} × ${l2.moduleKWh} kWh modules` : p.tagline}</div>
+                      </div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: "#fff" }}>×{p.qty}</div>
+                    </div>
+                  ))}
+                  {harviTotal > 0 && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", background: CARD, borderRadius: 10 }}>
+                      <Icon name="harvi"/>
+                      <div style={{ flex: 1 }}><div style={{ color: "#fff", fontSize: 15, fontWeight: 700 }}>harvi<Tip term="harvi"/></div><div style={{ color: MUTED, fontSize: 12 }}>Wireless CT sensor</div></div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: YELLOW }}>×{harviTotal}</div>
+                    </div>
+                  )}
+                  {result.additionalCTs > 0 && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", background: CARD, borderRadius: 10 }}>
+                      <div style={{ width: 48, height: 48, borderRadius: 6, background: "#262626", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: "#ccc" }}>CT</div>
+                      <div style={{ flex: 1 }}><div style={{ color: "#fff", fontSize: 15, fontWeight: 700 }}>Extra CT clamps<Tip term="CT"/></div><div style={{ color: MUTED, fontSize: 12 }}>Not included with your devices</div></div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: WARN }}>×{result.additionalCTs}</div>
+                    </div>
+                  )}
+                  {newProds.length === 0 && harviTotal === 0 && result.additionalCTs === 0 && <div style={{ fontSize: 13, color: MUTED }}>Nothing new to order.</div>}
                 </div>
+                {existingProds.length > 0 && (
+                  <div style={{ marginTop: 14, fontSize: 12, color: MUTED }}>Already installed: {existingProds.map(p => `${p.friendlyName}${p.qty > 1 ? ` ×${p.qty}` : ""}`).join(", ")}</div>
+                )}
+              </div>}
+
+              {/* App preview */}
+              <div className="tab-panel" data-active={activeTab === "app"} style={panelStyle("app")}>
+                <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", alignItems: "flex-start", gap: 16, padding: "16px", background: "#111", borderRadius: 12, border: `1px solid ${BORDER}` }}>
+                  <AppPreview cfg={cfg} result={result} monitorSolar={monitorSolar} monitorBattery={monitorBattery} zappiSinglePhase={zappiSinglePhase}/>
+                </div>
+                {!isInstaller && articles.length > 0 && (
+                  <div style={{ marginTop: 18 }}>
+                    <SectionHead>Helpful articles</SectionHead>
+                    {articles.map(a => (
+                      <a key={a.url} href={a.url} target="_blank" rel="noopener noreferrer"
+                        style={{ display: "block", fontSize: 13, color: BLUE, lineHeight: 1.7, textDecoration: "underline" }}>{a.title} ↗</a>
+                    ))}
+                  </div>
+                )}
               </div>
 
-              {/* Actions */}
-              <div className="no-print" style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              {/* libbi 2 installation (installer) */}
+              {isInstaller && hasNewLibbi && (
+                <div className="tab-panel" data-active={activeTab === "install"} style={panelStyle("install")}>
+                  <SectionHead>libbi 2 installation diagram</SectionHead>
+                  <Zoomable label="libbi 2 installation diagram">
+                    <Libbi2InstallDiagram libbi2={cfg.libbi2} region={cfg.region} sitePhase={cfg.phase}
+                      hasThirdPartyPv={thirdPartyInverters.length > 0} backupCircuits={cfg.libbi2.eps ? cfg.backupCircuits : []}/>
+                  </Zoomable>
+                  <div style={{ marginTop: 6, fontSize: 11, color: MUTED }}>Schematic only. The final design must comply with local wiring rules and the libbi 2 installation manual.</div>
+                </div>
+              )}
+
+              {/* Circuit protection (installer) */}
+              {isInstaller && (
+                <div className="tab-panel" data-active={activeTab === "protection"} style={panelStyle("protection")}>
+                  <SectionHead tipText="Minimum protection for each product's supply. Values marked TBC are still to be confirmed.">Minimum circuit protection</SectionHead>
+                  <ProtectionCards rows={protection}/>
+                </div>
+              )}
+
+              {/* CT routing (installer) */}
+              {isInstaller && (
+                <div className="tab-panel" data-active={activeTab === "ct"} style={panelStyle("ct")}>
+                  <SectionHead tip="CT">CT routing</SectionHead>
+                  <div style={{ overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                      <thead><tr>
+                        <th style={th}>Component</th><th style={{ ...th, textAlign: "center", width: 50 }}>CTs</th><th style={th}>Type</th><th style={th}>Input</th><th style={th}>Routing</th>
+                      </tr></thead>
+                      <tbody>
+                        {ctConfig.map((row, i) => (
+                          <React.Fragment key={i}>
+                            <tr>
+                              <td style={{ ...tdr(i), color: "#ccc" }}>{row.component}</td>
+                              <td style={{ ...tdr(i), textAlign: "center", color: G_TXT, fontWeight: 700 }}>{row.cts}</td>
+                              <td style={{ ...tdr(i), color: BLUE }}>{row.type}</td>
+                              <td style={{ ...tdr(i), color: row.routing === "harvi" ? YELLOW : MUTED }}>{row.input}</td>
+                              <td style={{ ...tdr(i), color: row.routing === "harvi" ? YELLOW : MUTED }}>
+                                {row.routing === "harvi" && effectiveWireless && cfg.phase === "1ph" ? `→ harvi, paired with ${result.master?.friendlyName || "myenergi device"}` : row.routing === "harvi" ? "→ harvi" : "→ wired to myenergi device"}
+                              </td>
+                            </tr>
+                            {row.note && <tr><td colSpan={5} style={{ padding: "6px 10px 10px", background: i % 2 === 0 ? CARD : "#1a1a1a" }}><InfoNote tone="warn">{row.note}</InfoNote></td></tr>}
+                          </React.Fragment>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div style={{ marginTop: 8, fontSize: 12, color: MUTED }}>{result.ctsIncluded} CT{result.ctsIncluded !== 1 ? "s" : ""} come with your devices. {result.additionalCTs > 0 ? `${result.additionalCTs} extra needed.` : "No extras needed."}</div>
+                </div>
+              )}
+
+              {/* Adjust design (installer) */}
+              {isInstaller && <details className="no-print" style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "4px 16px 10px" }}>
+                <summary style={{ cursor: "pointer", padding: "10px 0", fontSize: 14, fontWeight: 700, color: "#fff" }}>Adjust design</summary>
+                {result.selProds.length > 1 && (
+                  <div style={{ padding: "10px 0", borderBottom: "1px solid #2c2c2c" }}>
+                    <div style={{ fontSize: 14, marginBottom: 8 }}>Controller<Tip term="controller"/></div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                      {result.selProds.map(p => (
+                        <SelBtn key={p.id} active={controllerProductId === p.id} onClick={() => setControllerProductId(p.id)}>{p.friendlyName}</SelBtn>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {result.hasSolar && <ToggleRow checked={monitorSolar} onChange={() => setMonitorSolar(m => !m)} label="Show solar in the app" tip="monitor"/>}
+                {result.hasAcBat && <ToggleRow checked={monitorBattery} onChange={() => setMonitorBattery(m => !m)} label="Show battery in the app" tip="monitor"/>}
+                {cfg.phase === "1ph" && (
+                  <ToggleRow checked={effectiveWireless} disabled={ctrlForcesWireless} onChange={() => setWireless(w => !w)} label="Wireless CT clamps (harvi)" tip="harvi"
+                    note={ctrlForcesWireless ? "Needed: the controller doesn't have enough CT inputs." : null}/>
+                )}
+                {showZappiSinglePhase && (
+                  <ToggleRow checked={zappiSinglePhase} onChange={() => setZappiSinglePhase(z => !z)} label="zappi wired single phase"
+                    tipText="Tick if zappi connects to one phase only on a three-phase supply. A harvi then reads all three phases."/>
+                )}
+                {hasBatteryForSplit && (
+                  <ToggleRow checked={mainSwitchSplit} onChange={() => setMainSwitchSplit(s => !s)} label="Charge from grid without draining the battery" tip="split"/>
+                )}
+              </details>}
+
+              {/* Notes (installer) */}
+              {isInstaller && <div>
+                <SectionHead>Notes</SectionHead>
+                <textarea className="notes-textarea" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Add notes for the installation…"
+                  style={{ width: "100%", minHeight: 90, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 8, color: "#ddd", padding: "10px 12px", fontSize: 14, fontFamily: "inherit", resize: "vertical", boxSizing: "border-box" }}/>
+                <div className="notes-print" style={{ display: "none", whiteSpace: "pre-wrap", wordBreak: "break-word", fontSize: 12, lineHeight: 1.5, border: "1px solid #ccc", borderRadius: 6, padding: "10px 12px", minHeight: 60 }}>{notes || "—"}</div>
+              </div>}
+
+              {stickyNav(<>
                 <BackBtn onClick={() => setStep(1)}/>
-                <button onClick={resetAll} style={{ background: "none", border: `1px solid ${BORDER}`, color: "#aaa", borderRadius: 999, padding: "11px 24px", fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>← Start over</button>
-                <button onClick={exportPDF} style={{ background: G, color: "#000", border: "none", borderRadius: 999, padding: "11px 24px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Export PDF</button>
-              </div>
+                <button onClick={resetAll} style={{ background: "none", border: `1px solid ${BORDER}`, color: "#aaa", borderRadius: 999, padding: "11px 20px", fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>Start over</button>
+                <button onClick={exportPDF} style={{ background: G, color: "#000", border: "none", borderRadius: 999, padding: "11px 22px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Export PDF</button>
+              </>)}
             </div>
           );
         })()}
+        <div style={{ height: 24 }}/>
       </div>
     </div>
   );

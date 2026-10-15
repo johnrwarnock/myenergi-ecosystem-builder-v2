@@ -1,6 +1,7 @@
 import zappiImgUrl    from "../zappi.svg";
 import harviImgUrl    from "../harvi.svg";
-import libbiImgUrl    from "../libbi.svg";
+import libbi2CtrlImgUrl from "../libbi2-controller.svg";
+import libbi2ImgUrl    from "../libbi2.svg";
 import eddiImgUrl     from "../eddi.svg";
 import eddiPlusImgUrl from "../eddi+.svg";
 import gloImgUrl      from "../GLO.svg";
@@ -28,6 +29,8 @@ export const DEVICE_REGISTRY = {
   eddi:    { label: "eddi",    icon: eddiImgUrl,      role: "trunk", scale: 1.5 },
   "eddi+": { label: "eddi+",   icon: eddiPlusImgUrl,  role: "trunk", scale: 1.5 },
   GLO:     { label: "GLO",     icon: gloImgUrl,       role: "trunk", scale: 2 },
-  libbi:   { label: "libbi",   icon: libbiImgUrl,     role: "trunk", scale: 2.25 },
+  // Trunk role = the libbi 2 controller (CTs + comms). The inverter/battery
+  // stack itself is drawn on the solar row (DC) or as the AC battery.
+  "libbi 2": { label: "libbi 2", icon: libbi2CtrlImgUrl, stackIcon: libbi2ImgUrl, role: "trunk", scale: 1.5 },
   harvi:   { label: "harvi",   icon: harviImgUrl,     role: "satellite", scale: 1 },
 };
