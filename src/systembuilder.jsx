@@ -1366,7 +1366,7 @@ export default function App() {
                 <PicCard active={cfg.phase === "1ph"} onClick={() => setPhase("1ph")} title="Single phase" sub="Most homes"><PhaseIcon n={1}/></PicCard>
                 <PicCard active={cfg.phase === "3ph"} onClick={() => setPhase("3ph")} title="Three phase" sub="Larger homes and farms"><PhaseIcon n={3}/></PicCard>
               </div>
-              <button type="button" onClick={() => setPhase("2ph")} style={{ marginTop: 8, background: "none", border: "none", padding: 0, color: cfg.phase === "2ph" ? G_TXT : MUTED, fontSize: 12, textDecoration: "underline", cursor: "pointer", fontFamily: "inherit" }}>
+              <button type="button" onClick={() => setPhase("2ph")} style={{ marginTop: 10, background: "none", border: "none", padding: 0, color: cfg.phase === "2ph" ? G_TXT : "#ccc", fontSize: 14, fontWeight: 600, textDecoration: "underline", cursor: "pointer", fontFamily: "inherit" }}>
                 {cfg.phase === "2ph" ? "✓ Two phase selected" : "Other: two phase"}
               </button>
               {cfg.phase === "2ph" && <div style={{ marginTop: 8 }}><InfoNote tone="warn">Two phase isn't a standard setup. Contact myenergi support before installing.</InfoNote></div>}
@@ -1433,13 +1433,16 @@ export default function App() {
                   const qty = cfg.selections[p.id] || 0;
                   const imgUrl = ICON_URLS[p.name] || ICON_URLS[p.friendlyName];
                   const isActive = qty > 0;
-                  const maxed = atLimit || (p.maxQty && qty >= p.maxQty);
+                  // GLO is single phase, so it can't net energy across a three-phase supply.
+                  const phaseBlocked = p.id === 3 && cfg.phase === "3ph";
+                  const maxed = atLimit || phaseBlocked || (p.maxQty && qty >= p.maxQty);
                   return (
                     <div key={p.id}>
                       <div style={{
                         display: "flex", alignItems: "center", gap: 14,
                         padding: "12px 14px", background: isActive ? "rgba(64,255,122,0.07)" : CARD,
                         border: `1px solid ${isActive ? G : BORDER}`, borderRadius: 10,
+                        opacity: phaseBlocked ? 0.45 : 1,
                       }}>
                         <div style={{ width: 56, height: 56, background: "#ececec", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden", padding: 6, boxSizing: "border-box" }}>
                           {imgUrl && <img src={imgUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }}/>}
@@ -1465,6 +1468,7 @@ export default function App() {
                         </div>
                       </div>
                       {openDesc === p.id && <div style={{ margin: "6px 4px 0", fontSize: 12, color: "#bbb", lineHeight: 1.5 }}>{p.desc}</div>}
+                      {phaseBlocked && <div style={{ marginTop: 6 }}><InfoNote tone="warn">GLO is a single-phase device and may not accurately net energy across multiple phases.</InfoNote></div>}
 
                       {p.id === 6 && qty > 0 && (
                         <Libbi2Panel value={cfg.libbi2} onChange={setLibbi2} region={cfg.region} phase={cfg.phase}
