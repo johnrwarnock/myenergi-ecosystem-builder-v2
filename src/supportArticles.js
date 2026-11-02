@@ -18,6 +18,12 @@ export const HYBRID_ARTICLE = {
   url: HC + "4716922623633-Hybrid-PV-Battery-Set-up-Avoid-Draining",
 };
 
+/** Shown whenever a two-phase supply is selected. */
+export const TWO_PHASE_ARTICLE = {
+  title: "Installing myenergi devices on a two-phase supply",
+  url: HC + "52567088623505",
+};
+
 const zappiWith = (brand, slugBrand, id) => ({
   title: `How to use zappi with ${brand}: charge your EV from solar without draining your battery`,
   url: `${HC}${id}-How-to-Use-zappi-with-${slugBrand}-Battery-Charge-Your-EV-from-Solar-Without-Draining-Your-Battery`,

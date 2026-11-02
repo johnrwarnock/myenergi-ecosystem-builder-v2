@@ -11,7 +11,7 @@ import {
   LIBBI2_INVERTERS, LIBBI2_COUPLING, REGIONS, DEFAULT_LIBBI2, BACKUP_CIRCUIT_OPTIONS,
   libbi2Summary, libbi2Warnings, libbi2ProtectionRows, effectiveCoupling, COUPLING_LABELS, conductorColours, amps,
 } from "./libbi2.js";
-import { batterySupportArticles, GENERAL_BATTERY_ARTICLE, HYBRID_ARTICLE } from "./supportArticles.js";
+import { batterySupportArticles, GENERAL_BATTERY_ARTICLE, HYBRID_ARTICLE, TWO_PHASE_ARTICLE } from "./supportArticles.js";
 import { Tip, InfoNote, SectionHead, PicCard, PhaseIcon, SolarOnlyIcon, SolarBatteryIcon, BackupHouse, StackGraphic, BreakerBadge, Zoomable, ViewSwitch, ToggleRow } from "./ui.jsx";
 
 // ── Brand design tokens ───────────────────────────────────────────────────────
@@ -24,6 +24,14 @@ const MUTED  = "#777";      // subdued / hint text
 const WARN   = "#ff008c";   // Accent 2 — warnings & errors
 const YELLOW = "#ff008c";   // Accent 2 — harvi / wireless indicator
 const BLUE   = "#56c1dd";   // info blue
+
+const twoPhaseNote = (
+  <InfoNote tone="warn">
+    Two phase isn't a standard setup. Read{" "}
+    <a href={TWO_PHASE_ARTICLE.url} target="_blank" rel="noopener noreferrer" style={{ color: BLUE, textDecoration: "underline" }}>{TWO_PHASE_ARTICLE.title} ↗</a>
+    {" "}before installing, or contact myenergi support.
+  </InfoNote>
+);
 
 export const INVERTER_BRANDS = [
   { name: "Tesla Powerwall 3",    acOnly: false, allInOne: true,  autoBatId: 2  },
@@ -1369,7 +1377,7 @@ export default function App() {
               <button type="button" onClick={() => setPhase("2ph")} style={{ marginTop: 10, background: "none", border: "none", padding: 0, color: cfg.phase === "2ph" ? G_TXT : "#ccc", fontSize: 14, fontWeight: 600, textDecoration: "underline", cursor: "pointer", fontFamily: "inherit" }}>
                 {cfg.phase === "2ph" ? "✓ Two phase selected" : "Other: two phase"}
               </button>
-              {cfg.phase === "2ph" && <div style={{ marginTop: 8 }}><InfoNote tone="warn">Two phase isn't a standard setup. Contact myenergi support before installing.</InfoNote></div>}
+              {cfg.phase === "2ph" && <div style={{ marginTop: 8 }}>{twoPhaseNote}</div>}
             </div>
 
             <div>
@@ -1535,6 +1543,7 @@ export default function App() {
           const seen = new Set();
           const hasThirdPartyHybrid = thirdPartyInverters.some(i => i.hasCoupledBat);
           const articles = [
+            ...(cfg.phase === "2ph" ? [TWO_PHASE_ARTICLE] : []),
             ...(hasThirdPartyHybrid ? [HYBRID_ARTICLE] : []),
             ...batteryIds.flatMap(id => batterySupportArticles(id)).filter(a => a !== GENERAL_BATTERY_ARTICLE),
             ...(batteryIds.length ? [GENERAL_BATTERY_ARTICLE] : []),
@@ -1593,7 +1602,7 @@ export default function App() {
                 {stat(result.totalCTs, "CT clamps", "#fff", "CT")}
                 {stat(harviTotal, "harvi", harviTotal > 0 ? YELLOW : MUTED, "harvi")}
               </div>
-              {result.is2ph && <InfoNote tone="warn">Two phase isn't a standard setup. Contact myenergi support before installing.</InfoNote>}
+              {result.is2ph && twoPhaseNote}
               {hasNewLibbi && cfg.libbi2.csip && controllerProductId !== 6 && <InfoNote tone="warn">On a CSIP-AUS site, libbi 2 must be the controller. Change it under Adjust design.</InfoNote>}
 
               <div style={{ padding: "14px 16px", background: CARD, borderRadius: 10, border: `1px solid ${BORDER}`, display: "flex", flexDirection: "column", gap: 6 }}>
